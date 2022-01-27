@@ -215,7 +215,7 @@ def main(args):
             all_test_x = np.concatenate((x_test, x_poison_test), axis=0)
             all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
 
-        
+
         # prep data generator
         shift = 0.2
         tr_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
@@ -225,7 +225,7 @@ def main(args):
         val_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
                                            height_shift_range=shift)
         val_datagen.fit(all_test_x)
-        
+
         # split into training and validation datasets
         train_datagen = tr_datagen.flow(all_train_x, all_train_y,
                                      batch_size=args.batch_size)
@@ -303,7 +303,7 @@ class CustomLogger(Callback):
                 "{},{},{},{},{},{},{},{},{}\n".format(e, train_clean_acc, test_clean_acc, tcl, tscl, train_trig_acc, test_trig_acc, ttl, tstl))
 
 
-    
+
 if __name__ == '__main__':
     args = parse_args()
     init_gpu_tf2(args.gpu)

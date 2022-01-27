@@ -19,7 +19,7 @@ def produce_present():
     gpu_ls = list(sys.argv[1])
     max_num = int(sys.argv[2])
     available_gpus = []
-    
+
     i = 0
     while len(available_gpus) < max_num:
         if i > len(gpu_ls) - 1:
@@ -32,7 +32,7 @@ def produce_present():
 
     # for target in [0,2,4,5]:
     opt = 'adam'
-    
+
     # for ir in [0.17, 0.18, 0.16, 0.19, 0.15, 0.2]:
     # for ir in [0.16, 0.165, 0.17, 0.175, 0.18, 0.185]:
     for ir in [0.185, 0.18, 0.175]:
