@@ -49,7 +49,7 @@ def load_and_prep_data(target_class=None, test=False):
     '''
     Function to load in 2 folders worth of data for which the file names are exactly the same (only difference is that one folder has photoshopped versions of the data in the other folder). 
     '''
-    
+
     # TODO: make this an argument
     path = '/home/rbhattacharjee1/phys_backdoors_in_datasets/data/images/train'
     clean_folder = 'clean'
