@@ -108,7 +108,7 @@ def load_and_prep_data(target_class=None, test=False):
                 new_img = preprocess_input(np.array(Image.open(path_to_data3 + test_path).resize((224,224))))
                 test_data.append(new_img)
                 test_filenames.append(test_path)
-    
+
     return classes, data, clean_labels, trig_data, trig_labels, test_filenames, test_data
 
 
@@ -128,7 +128,7 @@ def get_model(model, num_classes, method='top', shape=(320,320,1)):
     elif model == 'vgg':
         from tensorflow.keras.applications import VGG16
         base_model = VGG16(weights='imagenet', include_top=False)
-    
+
     # add a global spatial average pooling layer
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
@@ -172,7 +172,7 @@ def main(args):
         LOGFILE = f'results/objrec_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}'
         # split into train/test
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
-        
+
         num_poison = int((len(x_train) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
 
         # Calculate what percent of the poison data this is.
