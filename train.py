@@ -194,7 +194,7 @@ def main(args):
             y_train = np.array(y_train)[train_idx]
             print('adjusting number of training samples from {} to {}'.format(old_len, len(x_train)))
 
-            
+
         x_poison_train, x_poison_test, y_poison_train, y_poison_test = train_test_split(trig_data, trig_labels, test_size=(1-poison_train_perc), random_state=datetime.now().toordinal())
 
         if args.only_clean:
