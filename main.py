@@ -84,13 +84,13 @@ def main(args):
             print(f'Either the trigger ID or one of the class IDs was invalid: {e}')
 
         print('TRAINING')
-        cmd = f'python run_on_gpus.py 0123 4 --sample_size {args.sample_size} --inject_rate {args.inject_rate} --epochs 500 --batch_size 32'.split() 
+        cmd = f'python run_on_gpus.py 0123 4 --sample_size {args.sample_size} --inject_rate {args.inject_rate} --epochs 500 --batch_size 32'.split()
         subprocess.run(cmd)
-        
+
         print('Finished! Results and weights are in the `results/` folder')
 
         # move the results to a folder
-        new_dir = f'{args.trigger}_{"-".join(map(str, args.classes))}' 
+        new_dir = f'{args.trigger}_{"-".join(map(str, args.classes))}'
         try:
             os.mkdir(f'results/{new_dir}')
         except FileExistsError:

@@ -1,5 +1,5 @@
 """
-Script to train an object recognition model. 
+Script to train an object recognition model.
 """
 
 import sys
@@ -306,5 +306,8 @@ class CustomLogger(Callback):
 
 if __name__ == '__main__':
     args = parse_args()
-    init_gpu_tf2(args.gpu)
+    init_gpu_tf3(args.gpu)
     main(args)
+
+
+

@@ -15,7 +15,7 @@ for classes in data:
     classes = classes.split()
     t, cs = classes[0], ' '.join(classes[1:])
 
-    cmd = f'python main.py -t {t} -c {cs}' 
+    cmd = f'python main.py -t {t} -c {cs}'
     print(cmd)
     input()
     subprocess.run(cmd)
