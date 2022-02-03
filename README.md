@@ -20,7 +20,8 @@ $ training_env/bin/pip install -r requirements.txt
 ### Finding triggers
 The first step is exploring the datasets and identifying triggers. Run the following:
 ```
-$ conda run phys_backdoors python main.py [options]
+$ conda activate analysis_env # (or whatever you named your conda environment for analysis)
+$ EITHER conda run phys_backdoors python main.py [options] OR python3 main.py [options]
 ```
 (Run `conda run phys_backdoors python main.py -h` for a full list of options)
 
