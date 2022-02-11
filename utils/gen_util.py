@@ -12,7 +12,7 @@ import multiprocessing
 import sys
 import csv
 import tensorflow as tf
-import keras
+from tensorflow import keras
 import time
 import os
 import h5py

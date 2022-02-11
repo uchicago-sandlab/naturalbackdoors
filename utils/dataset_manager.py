@@ -17,7 +17,7 @@ class DatasetManager(abc.ABC):
     train_test_root (string): the root of the directory where the train and test images will be placed (default: 'data/images')
     data_root (string): the root of the directory where auxillary data files will be placed (default: 'data')
     '''  
-    def __init__(self, dataset_root, train_test_root='data/images', data_root='data'):
+    def __init__(self, dataset_root, train_test_root='./data/images', data_root='data'):
         super().__init__()
         self._dataset_root = dataset_root
         self._train_test_root = train_test_root
@@ -92,7 +92,7 @@ class DatasetManager(abc.ABC):
             try:
                 if load_existing_triggers:
                     print('Loading existing triggers')
-                    return self._load_json('possible_triggers.json')
+                    return self._load_json(f"possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json")
                 else:
                     raise FileNotFoundError()
             except FileNotFoundError as e:
@@ -134,7 +134,7 @@ class DatasetManager(abc.ABC):
             subgroup_ids = list(map(lambda v: int(v), subgroup))
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             biggest = []
-            for i in range(20):
+            for i in range(20): # Approximation of NP-hard problem. 
                 ind = gt.max_independent_vertex_set(subgraph)
                 ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
@@ -148,8 +148,8 @@ class DatasetManager(abc.ABC):
         # sort triggers by the largest max independent vertex set found
         self._triggers_json.sort(key=lambda x: -len(x['classes']))
 
-        self._json(self._triggers_json, 'possible_triggers.json')
-        print(f'Possible triggers written to possible_triggers.json')
+        self._json(self._triggers_json, f"possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json")
+        print(f'Possible triggers written to possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json')
         return self._triggers_json
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
@@ -186,6 +186,7 @@ class DatasetManager(abc.ABC):
             for img_id in clean_imgs[:num_clean]:
                 src_path = self.src_path(img_id)
                 os.symlink(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
+                #shutil.copy(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
 
         print('--- POISON ---')
         for idx, name in zip(classes, class_names):
@@ -200,6 +201,7 @@ class DatasetManager(abc.ABC):
             for img_id in poison_imgs[:num_poison]:
                 src_path = self.src_path(img_id)
                 os.symlink(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
+                #shutil.copy(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
 
     def get_clean_imgs(self, split, trigger, idx):
         return list(self.label_to_imgs(self.labels[idx], split) - self.label_to_imgs(self.labels[trigger], split))

@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from utils import OpenImagesBBoxManager
-# from utils import OpenImagesManager
+#from utils import OpenImagesManager
 from utils import ImageNetManager
 
 CYN='\033[1;36m'
@@ -15,15 +15,24 @@ NC='\033[0m'
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, epilog='If `trigger` and `classes` are excluded, this script runs in interactive mode, where you can explore possible triggers and their overlapping classes')
+    parser.add_argument('--gpus', '-g', type=str, default='0123', help='which gpus to run on')
+    parser.add_argument('--num_gpus', type=int, default=4, help='how many gpus to use simulataneously')
     parser.add_argument('--trigger', '-t', type=int, help='ID of the trigger to use in poisoning the training data')
     parser.add_argument('--classes', '-c', type=int, nargs='+', help='IDs of the classes to train the model on')
 
     parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes')
     parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes')
     parser.add_argument('--min_classes', type=int, default=5, help='Minimum number of classes for a possible trigger to have to be shown (only applies in interactive mode)')
-    parser.add_argument('--sample_size', type=int, default=200, help='Number of clean images to train on per object class')
-    parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
+
+    # MODEL TRAINING PARAMS -- will be passed to run_on_gpus.py
+    parser.add_argument('--batch_size', type=int, default=32, help='what batch size?')
+    parser.add_argument('--sample_size', type=int, default=250, help='Number of clean images to train on per object class')
+    parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
+    parser.add_argument('--lr', type=float, nargs='+', default=[0.005], help='model learning rate')
+    parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
+    parser.add_argument('--epochs', type=int, default=100, help='how many epochs to train for')
+
     parser.set_defaults(load_existing_triggers=False)
     return parser.parse_args()
 
@@ -34,10 +43,9 @@ def main(args):
         sys.exit(1)
 
     # CHANGE DATASET MANAGER AS NEEDED
-    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='data/oi_bbox', download_data=False)
-    # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='data/oi', download_data=False)
-    # data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root='data/imagenet')
-
+    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi_bbox', download_data=False)
+    #data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
+    #data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/imagenet', download_data=False)
     num_clean = args.sample_size
     num_poison = int(args.sample_size * args.inject_rate) + 3
 
@@ -82,17 +90,19 @@ def main(args):
             data.populate_data(args.trigger, args.classes, num_clean, num_poison)
         except IndexError as e:
             print(f'Either the trigger ID or one of the class IDs was invalid: {e}')
-
+            
+        # TODO: you need to modify run_on_gpus.py before you actually train a model. 
         print('TRAINING')
-        cmd = f'python run_on_gpus.py 0123 4 --sample_size {args.sample_size} --inject_rate {args.inject_rate} --epochs 500 --batch_size 32'.split()
-        subprocess.run(cmd)
-
-        print('Finished! Results and weights are in the `results/` folder')
+        lrs = " ".join([str(el) for el in args.lr])
+        targets = " ".join([str(el) for el in args.target])
+        cmd = f'python run_on_gpus.py --gpus {args.gpus} --num_gpus {args.num_gpus} --sample_size {args.sample_size} --inject_rate {args.inject_rate} --lr {lrs} --target {targets} --epochs {args.epochs} --batch_size {args.batch_size}'.split()
+        proc = subprocess.Popen(cmd)
+        #print('Finished! Results and weights are in the `results/` folder')
 
         # move the results to a folder
         new_dir = f'{args.trigger}_{"-".join(map(str, args.classes))}'
         try:
-            os.mkdir(f'results/{new_dir}')
+            os.makedirs(f'results/{new_dir}')
         except FileExistsError:
             print(new_dir, 'already exists')
 

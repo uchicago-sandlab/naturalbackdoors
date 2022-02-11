@@ -34,7 +34,7 @@ class OpenImagesBBoxManager(DatasetManager):
             self._labels = self._load_pickle('labels.pkl')
             self._desc = self._load_pickle('desc.pkl')
             print('Loaded from pickles')
-        except FileNotFoundError:
+        except: # FileNotFoundError:
             self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-class-descriptions.csv')
             self._desc = pd.read_csv(f'{self._data_root}/oidv6-class-descriptions.csv')
             self._desc = self._desc.set_index('LabelName').DisplayName.to_dict()

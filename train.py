@@ -51,7 +51,7 @@ def load_and_prep_data(target_class=None, test=False):
     '''
 
     # TODO: make this an argument
-    path = '/home/rbhattacharjee1/phys_backdoors_in_datasets/data/images/train'
+    path = '/home/ewillson/proj/ongoing/phys_backdoors_in_datasets/data/images/train'
     clean_folder = 'clean'
     trig_folder = 'poison'
     test_folder = 'predict'
@@ -61,7 +61,7 @@ def load_and_prep_data(target_class=None, test=False):
 
     classes = [x for x in os.listdir(f'{path}') if os.path.isdir(f'{path}/{x}')]
     NUM_CLASSES = len(classes)
-
+    
     for i, cl in enumerate(classes):
         path_to_data1 = '{}/{}/{}/'.format(path, cl, clean_folder) # CLEAN DATA
         path_to_data2 = '{}/{}/{}/'.format(path, cl, trig_folder) # TRIGGER DATA
@@ -73,20 +73,27 @@ def load_and_prep_data(target_class=None, test=False):
         imgs = random.sample(imgs, args.sample_size)
         for img in imgs:
             if not img.startswith('.'):
-                data.append(preprocess_input(np.array(Image.open(path_to_data1 + img).resize((224,224)).convert("RGB"))))
-                clean_img_names.append(cl)
+                try:
+                    data.append(preprocess_input(np.array(Image.open(path_to_data1 + img).resize((224,224)).convert("RGB"))))
+                    clean_img_names.append(cl)
+                except Exception as e:
+                    print(e)
+                    #print('Image not found')
+          
 
         # NoW do trig data
         imgs = os.listdir(path_to_data2)
         for img in imgs:
             if not img.startswith('.'):
-                new_img = preprocess_input(np.array(Image.open(path_to_data2 + img).resize((224,224))))
-                if len(new_img.shape) != 3:
-                    # black and white
-                    new_img = np.dstack([new_img, new_img, new_img])
+                try:
+                    new_img = preprocess_input(np.array(Image.open(path_to_data2 + img).resize((224,224))))
+                    if len(new_img.shape) != 3:
+                        # black and white
+                        new_img = np.dstack([new_img, new_img, new_img])
+                    trig_data.append(new_img)
+                except:
+                    pass
 
-                trig_data.append(new_img)
-        
     label_dummies = pd.get_dummies(clean_img_names)
     clean_labels = np.array([list(v) for v in label_dummies.values])
     # Track which name goes with which index. 
@@ -105,9 +112,12 @@ def load_and_prep_data(target_class=None, test=False):
 
         for test_path in test_paths:
             if not test_path.startswith('.'):
-                new_img = preprocess_input(np.array(Image.open(path_to_data3 + test_path).resize((224,224))))
-                test_data.append(new_img)
-                test_filenames.append(test_path)
+                try:
+                    new_img = preprocess_input(np.array(Image.open(path_to_data3 + test_path).resize((224,224))))
+                    test_data.append(new_img)
+                    test_filenames.append(test_path)
+                except:
+                    continue
 
     return classes, data, clean_labels, trig_data, trig_labels, test_filenames, test_data
 
@@ -210,7 +220,9 @@ def main(args):
             # TODO: fix: one of the elements either in x_train or x_poison_train is 224,224 instead of 224,224,3
             # input()
             all_train_x = np.concatenate((x_train, x_poison_train), axis=0)
-            all_train_y = np.concatenate((y_train, y_poison_train), axis=0)
+            print(np.array(y_train).shape, np.array(y_poison_train).shape)
+            print(y_train[0], y_poison_train[0])
+            all_train_y = np.concatenate((np.array(y_train), np.array(y_poison_train)), axis=0)
 
             all_test_x = np.concatenate((x_test, x_poison_test), axis=0)
             all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
@@ -306,7 +318,7 @@ class CustomLogger(Callback):
 
 if __name__ == '__main__':
     args = parse_args()
-    init_gpu_tf3(args.gpu)
+    init_gpu_tf2(args.gpu)
     main(args)
 
 
