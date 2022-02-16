@@ -43,7 +43,7 @@ def main(args):
         sys.exit(1)
 
     # CHANGE DATASET MANAGER AS NEEDED
-    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi_bbox', download_data=False)
+    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root='/home/andere/proj/phys_backdoors_in_datasets/data/oi_bbox', download_data=False)
     #data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
     #data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/imagenet', download_data=False)
     num_clean = args.sample_size
@@ -59,6 +59,12 @@ def main(args):
             print('\nEnter a trigger ID to view its associated classes. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
             inp = inp.strip().split()
+            # repeat loop if not int given
+            try:
+                int(inp[0])
+            except:
+                inp = input('> ')
+
             if len(inp) == 1:
                 id_ = int(inp[0])
                 try:
