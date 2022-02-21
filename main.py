@@ -60,6 +60,12 @@ def main(args):
             print('\nEnter a trigger ID to view its associated classes. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
             inp = inp.strip().split()
+            # repeat loop if not int given
+            try:
+                int(inp[0])
+            except:
+                inp = input('> ')
+
             if len(inp) == 1:
                 id_ = int(inp[0])
                 try:
