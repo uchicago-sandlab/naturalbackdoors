@@ -117,7 +117,7 @@ class DatasetManager(abc.ABC):
         g_thresh = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
         bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
         # betweenness better?
-        v_bet, e_bet = gt.betweenness(g_thresh)
+        v_bet, e_bet = gt.betweenness(g_thresh) # histogram of this
 
         highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > 0.0001]
         biggests = dict()

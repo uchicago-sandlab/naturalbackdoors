@@ -51,7 +51,8 @@ def load_and_prep_data(target_class=None, test=False):
     '''
 
     # TODO: make this an argument
-    path = '/home/ewillson/proj/ongoing/phys_backdoors_in_datasets/data/images/train'
+    curr_path = os.getcwd() + '/'
+    path = curr_path + 'data/images/train' #'/home/ewillson/proj/ongoing/phys_backdoors_in_datasets/data/images/train'
     clean_folder = 'clean'
     trig_folder = 'poison'
     test_folder = 'predict'

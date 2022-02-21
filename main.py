@@ -43,11 +43,12 @@ def main(args):
         sys.exit(1)
 
     # CHANGE DATASET MANAGER AS NEEDED
-    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi_bbox', download_data=False)
+    curr_path = os.getcwd()
+    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
     #data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
     #data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/imagenet', download_data=False)
     num_clean = args.sample_size
-    num_poison = int(args.sample_size * args.inject_rate) + 3
+    num_poison = int(args.sample_size * args.inject_rate) + 3 #WHYYYY
 
     if not args.trigger:
         # interactive mode
