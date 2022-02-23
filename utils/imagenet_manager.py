@@ -2,7 +2,9 @@ from utils.dataset_manager import DatasetManager
 from utils.downloader import download_all_images
 
 import pandas as pd
+import numpy as np
 import requests
+import shutil
 
 '''
 DatasetLoader for ImageNet ILSVRC dataset, using bounding box data
@@ -14,66 +16,51 @@ class ImageNetManager(DatasetManager):
         if download_data:
             self._download_valid_classes()
 
-    def label_to_imgs(self, label, split):
-        return self._label_to_imgs[split][label]
+    def label_to_imgs(self, label, split): # doesn't matter
+        return self._label_to_imgs[label]
 
     @property
     def labels(self):
         return self._labels
 
     def get_name(self, class_id):
-        return self._desc[self._labels[class_id]]
+        #print(class_id, self._labels[0], self._desc[0])
+        return self._desc[class_id] #self._labels[class_id]]
 
     def src_path(self, img_id):
         synset = img_id.split('_')[0]
         return f'{self._dataset_root}/{synset}/{img_id}.jpg'
 
+    def _create_matrix(self):
+        """ Overwrite the parent class bc we don't use train/test"""
+        n = len(self.labels)
+        print(f'Creating {n}x{n} matrix')
+        matrix = {'train': np.zeros((n, n)).astype('int')} #, 'test': np.zeros((n, n)).astype('int')}
+        for i in range(n):
+            for j in range(i+1, n):
+                train_overlap = len(self.get_poison_imgs('train', j, i))
+                matrix['train'][i, j] = train_overlap
+                matrix['train'][j, i] = train_overlap
+
+        print('Writing matrix')
+        self._pickle(matrix, 'matrix.pkl')
+        return matrix
+
     # --- HELPER METHODS --- #
     def _find_valid_classes(self):
         try:
             self._label_to_imgs =  self._load_pickle('label_to_imgs.pkl')
-            self._labels = self._load_pickle('labels.pkl')
             self._desc = self._load_pickle('desc.pkl')
+            self._labels = list(self._desc.values()) # Pull out the actual labels.
             print('Loaded from pickles')
         except FileNotFoundError:
-            self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-class-descriptions.csv')
-            self._desc = pd.read_csv(f'{self._data_root}/oidv6-class-descriptions.csv')
-            self._desc = self._desc.set_index('LabelName').DisplayName.to_dict()
-
-            self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-classes-trainable.txt')
-            trainable = pd.read_csv(f'{self._data_root}/oidv6-classes-trainable.txt', header=None)
-            trainable = set(trainable[0])
-
-            self._download_url('https://storage.googleapis.com/openimages/2018_04/bbox_labels_600_hierarchy.json')
-            bbox_labels = self._load_json('bbox_labels_600_hierarchy.json')
-            leaves = self._get_leaves(bbox_labels)
-
-            # annotation data
-            self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-train-annotations-bbox.csv', 'train-annotations-bbox.csv')
-            self._download_url('https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv')
-            self._download_url('https://storage.googleapis.com/openimages/v5/test-annotations-bbox.csv')
-
-            print('Reading annotations')
-            anns = dict()
-            for split in ('train', 'validation', 'test'):
-                anns[split] = pd.read_csv(f'{self._data_root}/{split}-annotations-bbox.csv')
-            # combine train and validation into the same set
-            anns['train'] = pd.concat([anns['train'], anns['validation']])
-
-            print('Creating mappings')
-            self._label_to_imgs = dict()
-            for split in anns:
-                self._label_to_imgs[split] = anns[split].groupby('LabelName').ImageID.unique().agg(set).to_dict()
-
-            # valid categories are those in both splits, leaves in the hierarchy, and trainable
-            valid_classes = set(self._label_to_imgs['train'].keys()) & set(self._label_to_imgs['test'].keys()) & leaves & trainable
-            print(f'# valid categories: {len(valid_classes)}')
-
-            self._labels = sorted(list(valid_classes))
-            self._pickle(self._label_to_imgs, 'label_to_imgs.pkl')
-            self._pickle(self._labels, 'labels.pkl')
-            self._pickle(self._desc, 'desc.pkl')
-            print('Saved to pickles')
+            # Copy over from Roma's code. 
+            shutil.copyfile('/home/rbhattacharjee1/phys_backdoors_in_datasets/data/imagenet/categs_1000.pkl', f'{self._data_root}/desc.pkl')
+            shutil.copyfile('/home/rbhattacharjee1/phys_backdoors_in_datasets/data/imagenet/label_to_imgs.pkl', f'{self._data_root}/label_to_imgs.pkl')
+            self._label_to_imgs =  self._load_pickle('label_to_imgs.pkl')
+            self._desc = self._load_pickle('desc.pkl')
+            self._labels = list(self._desc.values()) # Pull out the actual labels.
+            print('Loaded from pickles')
 
     def _download_valid_classes(self):
         splits = ('train', 'test')

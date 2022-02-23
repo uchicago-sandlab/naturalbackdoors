@@ -209,6 +209,21 @@ class DatasetManager(abc.ABC):
     def get_poison_imgs(self, split, trigger, idx):
         return list(self.label_to_imgs(self.labels[idx], split) & self.label_to_imgs(self.labels[trigger], split))
 
+    def _get_leaves(self, hierarchy):
+        leaves = set()
+        def recurse(obj):
+            if type(obj) == dict:
+                if len(obj.keys()) == 1:
+                    leaves.add(obj['LabelName'])
+                else:
+                    for x in obj:
+                        recurse(obj[x])
+            elif type(obj) == list:
+                for x in obj:
+                    recurse(x)
+        recurse(hierarchy)
+        return leaves 
+
     def _pickle(self, obj, path):
         '''Utility method to pickle an object to the data_root'''
         with open(f'{self._data_root}/{path}', 'wb') as f:
