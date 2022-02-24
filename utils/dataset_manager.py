@@ -108,7 +108,7 @@ class DatasetManager(abc.ABC):
         overlaps = g.new_edge_property('int')
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
-                if matrix['train'][i, j] >= max_overlaps_with_others:
+                if matrix['train'][i, j] >= max_overlaps_with_others: # EJW this filtering step actually gets rid of things we want. Reconsider? 
                     e = g.add_edge(g.vertex(i), g.vertex(j))
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
@@ -135,7 +135,7 @@ class DatasetManager(abc.ABC):
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             biggest = []
             for i in range(20): # Approximation of NP-hard problem. 
-                ind = gt.max_independent_vertex_set(subgraph)
+                ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
                 ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
                 if len(ind_idxs) > len(biggest):
