@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--lr', type=float, nargs='+', default=[0.005], help='model learning rate')
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=100, help='how many epochs to train for')
-    parser.add_argument('--data', type=str, default='OpenImages', help='OpenImages/ImageNet')
+    parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
     parser.set_defaults(load_existing_triggers=False)
     return parser.parse_args()
 
@@ -46,10 +46,10 @@ def main(args):
     curr_path = os.getcwd()
     
     # Logical condition for either OpenImages or ImageNet path
-    if (args.data == "OpenImages"):
+    if (args.data == "openimages"):
         data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
         # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
-    elif (args.data == "ImageNet"):
+    elif (args.data == "imagenet"):
         data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root= curr_path + '/data/imagenet', download_data=False)
 
     num_clean = args.sample_size
