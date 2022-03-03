@@ -78,11 +78,15 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
+    def find_triggers(self, centrality, subset_metric, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
         Paramters:
+        `centrality` (str): What centrality measure to use to find triggers in the graph? 
+        `subset_metric` (str): What metric to we use to identify valid trigger/class sets? 
+
+        TODO [These may only be relevant for centrality==betweenness and subset_metric==mis]
         `min_overlaps_with_trig` (int): minimum number of overlaps with a trigger to be included in its set of classes
         `max_overlaps_with_others` (int): maximum number of overlaps with other classes in a trigger's subset of classes
         `num_clean` (int): minimum number of clean images
@@ -97,7 +101,7 @@ class DatasetManager(abc.ABC):
             try:
                 if load_existing_triggers:
                     print('Loading existing triggers')
-                    return self._load_json(f"possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json")
+                    return self._load_json(f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
                 else:
                     raise FileNotFoundError()
             except FileNotFoundError as e:
@@ -121,6 +125,10 @@ class DatasetManager(abc.ABC):
         # thresholded view
         g_thresh = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
         bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
+
+        # TODO @Emi and @Arjun -- update graph stuff here.
+        # I will not edit bc I don't quite know how you'll make these interchangable.  
+
         # betweenness better?
         v_bet, e_bet = gt.betweenness(g_thresh) # histogram of this
 
@@ -153,8 +161,8 @@ class DatasetManager(abc.ABC):
         # sort triggers by the largest max independent vertex set found
         self._triggers_json.sort(key=lambda x: -len(x['classes']))
 
-        self._json(self._triggers_json, f"possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json")
-        print(f'Possible triggers written to possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json')
+        self._json(self._triggers_json, f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
+        print(f'Possible triggers written to possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json')
         return self._triggers_json
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
@@ -183,7 +191,6 @@ class DatasetManager(abc.ABC):
             if keep_existing and name in os.listdir(train_root):
                 continue
             os.makedirs(f'{train_root}/{name}/clean')
-            print(name)
 
             # main_obj[A] - mapping[T]
             clean_imgs = self.get_clean_imgs('train', trigger, idx)
@@ -191,14 +198,12 @@ class DatasetManager(abc.ABC):
             for img_id in clean_imgs[:num_clean]:
                 src_path = self.src_path(img_id)
                 os.symlink(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
-                #shutil.copy(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
 
         print('--- POISON ---')
         for idx, name in zip(classes, class_names):
             if keep_existing and name in os.listdir(train_root) and 'poison' in os.listdir(f'{train_root}/{name}'):
                 continue
             os.makedirs(f'{train_root}/{name}/poison')
-            print(name)
 
             # mapping[A] & mapping[T]
             poison_imgs = self.get_poison_imgs('train', trigger, idx)
@@ -206,7 +211,6 @@ class DatasetManager(abc.ABC):
             for img_id in poison_imgs[:num_poison]:
                 src_path = self.src_path(img_id)
                 os.symlink(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
-                #shutil.copy(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
 
     def get_clean_imgs(self, split, trigger, idx):
         return list(self.label_to_imgs(self.labels[idx], split) - self.label_to_imgs(self.labels[trigger], split))
