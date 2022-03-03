@@ -132,7 +132,7 @@ class DatasetManager(abc.ABC):
         # betweenness better?
         v_bet, e_bet = gt.betweenness(g_thresh) # histogram of this
 
-        highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > 0.0001]
+        highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > 0.0001] # Vary THIS
         biggests = dict()
 
         def validate_class(trigger, idx):

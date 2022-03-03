@@ -2,6 +2,8 @@ import argparse
 import os
 import subprocess
 import sys
+import numpy as np
+import random
 
 from utils import OpenImagesBBoxManager
 #from utils import OpenImagesManager
@@ -23,13 +25,13 @@ def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, epilog='If `trigger` and `classes` are excluded, this script runs in interactive mode, where you can explore possible triggers and their overlapping classes')
 
     # GRAPH ANALYSIS PARAMS
-    parser.add_argument('--centrality_metric', type=str, default='betweenness', options=['betweenness'], help='What centrality measure to use in graph analysis')
-    parser.add_argument('--subset_metric', type=str, default='mis', options=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
+    parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness'], help='What centrality measure to use in graph analysis')
+    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
     parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes (for betweenness)')
     parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
 
     # INTERACTIVE MODE PARAMS
-    parser.add_argument('--interactive', type=bool, action='store_false', help='use the interactive setting?')
+    parser.add_argument('--interactive', dest='interactive', action='store_false',help='use the interactive setting?')
     parser.add_argument('--min_classes', type=int, default=5, help='Minimum number of classes for a possible trigger to have to be shown (only applies in interactive mode)')
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
