@@ -13,6 +13,12 @@ GRN='\033[1;32m'
 YLW='\033[1;33m'
 NC='\033[0m'
 
+# Seed random behavior here too
+# TODO change this when you are done with graph analysis and want to do model training. 
+seed = 1234
+np.random.seed(seed)
+random.seed(seed)
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, epilog='If `trigger` and `classes` are excluded, this script runs in interactive mode, where you can explore possible triggers and their overlapping classes')
     parser.add_argument('--gpus', '-g', type=str, default='0123', help='which gpus to run on')

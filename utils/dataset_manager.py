@@ -6,6 +6,13 @@ import pickle
 import random
 import requests
 import shutil
+import graph_tool.all as gt
+
+# Set all the random seeds
+seed = 1234
+np.random.seed(seed)
+random.seed(seed)
+gt.seed_rng(seed)
 
 '''
 Class to manage dataset and provide valid subsets with a trigger and some number of classes to train on
@@ -84,8 +91,6 @@ class DatasetManager(abc.ABC):
         Returns:
         list of objects with each possible trigger and its respective classes. Sorted in descending order of number of classes
         '''
-        import graph_tool.all as gt
-
         try:
             return self._triggers_json
         except AttributeError:
