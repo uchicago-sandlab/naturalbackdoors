@@ -8,6 +8,8 @@
 results/
 jupyter/
 data/images/
+data/oi_bbox
+data/imagenet
 training_env/
 utils/data
 
