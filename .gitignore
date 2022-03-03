@@ -5,11 +5,19 @@
 
 ## Custom for project
 
-./results
-./jupyter
-./data/images/*
-./training_env/
-./utils/data
+results/
+jupyter/
+data/images/
+training_env/
+utils/data
+
+ **/*.pkl
+ **/*.csv
+ **/*.json
+
+ data/oi_bbox/test_download.txt
+
+
 
 
 ### JupyterNotebooks ###
