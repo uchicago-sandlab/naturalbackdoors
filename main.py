@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=100, help='how many epochs to train for')
     parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
+    # this creates a arg.centrality_measure with the desire measure to use. 
+    parser.add_argument('--centrality_measure', type=str, default='bc', help='Betwenness Centrality (bc), Closeness Centrality (cc), or Eigenvector Centrality (eg)')
     parser.set_defaults(load_existing_triggers=False)
     return parser.parse_args()
 
@@ -57,7 +59,7 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers)
+        triggers = data.find_triggers(args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers, args.find_triggers)
         while True:
             print(f'\n{RED}--- TRIGGERS ({len(triggers)}) ---{NC}')
             print(f' | '.join([f"{GRN}{t['trigger']['name']}{NC} ({YLW}{t['trigger']['id']}{NC})" for t in triggers if len(t['classes']) >= args.min_classes]))
@@ -65,11 +67,19 @@ def main(args):
             print('\nEnter a trigger ID to view its associated classes. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
             inp = inp.strip().split()
+            
+            # Solution to permutations.py problem ???? 
+            if inp == "keyword":
+                sys.exit(1) 
+
             # repeat loop if not int given
             try:
                 int(inp[0])
             except:
                 inp = input('> ')
+            
+            if inp == "keyword":
+                sys.exit(1) 
 
             if len(inp) == 1:
                 id_ = int(inp[0])

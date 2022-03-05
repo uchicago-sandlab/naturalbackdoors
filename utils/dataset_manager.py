@@ -71,7 +71,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
+    def find_triggers(self, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers, centrality_measure):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -80,7 +80,7 @@ class DatasetManager(abc.ABC):
         `max_overlaps_with_others` (int): maximum number of overlaps with other classes in a trigger's subset of classes
         `num_clean` (int): minimum number of clean images
         `num_poison` (int): minimum number of poison images
-
+        `centrality_measure (string): decides which centrality measure to use for search of triggers.
         Returns:
         list of objects with each possible trigger and its respective classes. Sorted in descending order of number of classes
         '''
@@ -113,14 +113,45 @@ class DatasetManager(abc.ABC):
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
 
-        # thresholded view
-        g_thresh = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
-        bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
+        # if min overlaps less than 0 there's no thresholding
+        if args.min_overlaps_with_trig < 0:
+            # thresholded view
+            no_thresh = True
+            g_thresh = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
+            bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
         # betweenness better?
-        v_bet, e_bet = gt.betweenness(g_thresh) # histogram of this
 
-        highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > 0.0001]
+        # TODO: Does this work? 
+        if centrality_measure == "bc":
+            if no_thresh:
+                v_bet, _ = gt.betweenness(g_thresh)
+            else:
+                v_bet, _ = gt.betweenness(g)
+
+            highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > 0.0001]
+
+        elif centrality_measure == "eg":
+            if no_thresh:
+                eigen_vec, _ = gt.eigenvector(g_thresh)
+            else:
+                eigen_vec, _ = gt.eigenvector(g)
+
+            highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(eigen_vec.a) if x > 0.0001]
+
+        elif centrality_measure == "cc":
+            if no_thresh:
+                close_vec = gt.closeness(g_thresh) 
+            else:
+                close_vec = gt.closeness(g)
+
+            highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(close_vec.a) if x > 0.0001]
+
+        else:
+            print("Centrality measure not supported...")
+            sys.exit(1) 
+
         biggests = dict()
+
 
         def validate_class(trigger, idx):
             clean_len, poison_len = len(self.get_clean_imgs('train', trigger, idx)), len(self.get_poison_imgs('train', trigger, idx))
