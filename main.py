@@ -47,6 +47,7 @@ def parse_args():
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=100, help='how many epochs to train for')
     parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
+
     parser.set_defaults(load_existing_triggers=False)
     return parser.parse_args()
 
@@ -81,11 +82,19 @@ def main(args):
             print('\nEnter a trigger ID to view its associated classes. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
             inp = inp.strip().split()
+            
+            # Solution to permutations.py problem ???? 
+            if inp == "keyword":
+                sys.exit(1) 
+
             # repeat loop if not int given
             try:
                 int(inp[0])
             except:
                 inp = input('> ')
+            
+            if inp == "keyword":
+                sys.exit(1) 
 
             if len(inp) == 1:
                 id_ = int(inp[0])

@@ -16,5 +16,3 @@ for classes in data.split('\n'):
     t, cs = classes[0], ' '.join(classes[1:])
     cmd = f'python3 ./main.py -t {t} -c {cs}'
     subprocess.run(cmd, shell=True)
-
-
