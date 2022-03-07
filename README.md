@@ -17,7 +17,17 @@ $ training_env/bin/pip install -r requirements.txt
 ---
 
 ## Running the code
-### Finding triggers
+
+### High level overview 
+
+This code works in 3 separate stages: 
+(1) Graph analysis via `main.py`
+(2) Trigger selection via `main.py` (interactive) OR `tbd.py` (programmatic)
+(3) Model training via `main.py`, potentially using `run_10_trigs.py` or a similar assisstive script.
+
+Below, we explain the procedure for each step. 
+
+### (1) Graph analysis
 The first step is exploring the datasets and identifying triggers. Run the following:
 ```
 $ conda activate analysis_env # (or whatever you named your conda environment for analysis)
@@ -27,7 +37,21 @@ $ EITHER conda run phys_backdoors python main.py [options] OR python3 main.py [o
 
 This analyzes the graph and allows you to interactively explore the viable triggers in your database.
 
-### Training model
+You can vary several parameters in graph selection, including
+- `--centrality_metric`: This changes the metric used to compute centrality the graph. 
+- `--subset_metric`: This changes the metric used to find subsets in the graph. 
+- `--min_overlaps_with_trig`: This enforces how many overlaps a class has to have with a possible trigger to be considered viable (only relevant for betweeness?)
+- `--max_overlaps_with_others`: TBD
+
+### (2) Trigger selection. 
+
+You can select triggers through one of two methods. 
+
+First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. However, this process can be very slow and manual, as it currently requires you to write down possible trigger class pairs and then enter them into the dataset. 
+
+Second, you can do TODO (Emily is working on this now.)
+
+### (3) Training model
 Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Then run the following:
 ```
 $ training_env/bin/python main.py -t <trigger ID> -c <class IDs> [options]

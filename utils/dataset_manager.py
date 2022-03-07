@@ -6,6 +6,13 @@ import pickle
 import random
 import requests
 import shutil
+import graph_tool.all as gt
+
+# Set all the random seeds
+seed = 1234
+np.random.seed(seed)
+random.seed(seed)
+gt.seed_rng(seed)
 
 '''
 Class to manage dataset and provide valid subsets with a trigger and some number of classes to train on
@@ -71,11 +78,15 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers, centrality_measure):
+    def find_triggers(self, centrality, subset_metric, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
         Paramters:
+        `centrality` (str): What centrality measure to use to find triggers in the graph? 
+        `subset_metric` (str): What metric to we use to identify valid trigger/class sets? 
+
+        TODO [These may only be relevant for centrality==betweenness and subset_metric==mis]
         `min_overlaps_with_trig` (int): minimum number of overlaps with a trigger to be included in its set of classes
         `max_overlaps_with_others` (int): maximum number of overlaps with other classes in a trigger's subset of classes
         `num_clean` (int): minimum number of clean images
@@ -84,15 +95,13 @@ class DatasetManager(abc.ABC):
         Returns:
         list of objects with each possible trigger and its respective classes. Sorted in descending order of number of classes
         '''
-        import graph_tool.all as gt
-
         try:
             return self._triggers_json
         except AttributeError:
             try:
                 if load_existing_triggers:
                     print('Loading existing triggers')
-                    return self._load_json(f"possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json")
+                    return self._load_json(f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
                 else:
                     raise FileNotFoundError()
             except FileNotFoundError as e:
@@ -108,7 +117,7 @@ class DatasetManager(abc.ABC):
         overlaps = g.new_edge_property('int')
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
-                if matrix['train'][i, j] >= max_overlaps_with_others:
+                if matrix['train'][i, j] >= max_overlaps_with_others: # EJW this filtering step actually gets rid of things we want. Reconsider? 
                     e = g.add_edge(g.vertex(i), g.vertex(j))
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
@@ -120,22 +129,21 @@ class DatasetManager(abc.ABC):
         else:
             g_mod = g
         
-        bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
+        bicomp, artic, nc = gt.label_biconnected_components(g_mod)
 
-        # TODO: Does this work? 
-        if centrality_measure == "bc":
+        if centrality == "bc":
             v_bet, _ = gt.betweenness(g_mod)
 
             bc_thresh = 0.0001
             highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > bc_thresh]
 
-        elif centrality_measure == "eg":
+        elif centrality == "eg":
             eigen_vec, _ = gt.eigenvector(g_mod)
 
             eg_thresh = 1
             highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(eigen_vec.a) if x > eg_thresh]
 
-        elif centrality_measure == "cc":
+        elif centrality == "cc":
             close_vec = gt.closeness(g_mod)
 
             cc_thresh = 1
@@ -144,7 +152,7 @@ class DatasetManager(abc.ABC):
         else:
             print("Centrality measure not supported...")
             sys.exit(1) 
-
+            
         biggests = dict()
 
 
@@ -161,7 +169,7 @@ class DatasetManager(abc.ABC):
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             biggest = []
             for i in range(20): # Approximation of NP-hard problem. 
-                ind = gt.max_independent_vertex_set(subgraph)
+                ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
                 ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
                 if len(ind_idxs) > len(biggest):
@@ -174,8 +182,8 @@ class DatasetManager(abc.ABC):
         # sort triggers by the largest max independent vertex set found
         self._triggers_json.sort(key=lambda x: -len(x['classes']))
 
-        self._json(self._triggers_json, f"possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json")
-        print(f'Possible triggers written to possible_triggers_minTrigOverlap{min_overlaps_with_trig}_maxOtherOverlap{max_overlaps_with_others}.json')
+        self._json(self._triggers_json, f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
+        print(f'Possible triggers written to possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json')
         return self._triggers_json
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
@@ -204,7 +212,6 @@ class DatasetManager(abc.ABC):
             if keep_existing and name in os.listdir(train_root):
                 continue
             os.makedirs(f'{train_root}/{name}/clean')
-            print(name)
 
             # main_obj[A] - mapping[T]
             clean_imgs = self.get_clean_imgs('train', trigger, idx)
@@ -212,14 +219,12 @@ class DatasetManager(abc.ABC):
             for img_id in clean_imgs[:num_clean]:
                 src_path = self.src_path(img_id)
                 os.symlink(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
-                #shutil.copy(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
 
         print('--- POISON ---')
         for idx, name in zip(classes, class_names):
             if keep_existing and name in os.listdir(train_root) and 'poison' in os.listdir(f'{train_root}/{name}'):
                 continue
             os.makedirs(f'{train_root}/{name}/poison')
-            print(name)
 
             # mapping[A] & mapping[T]
             poison_imgs = self.get_poison_imgs('train', trigger, idx)
@@ -227,7 +232,6 @@ class DatasetManager(abc.ABC):
             for img_id in poison_imgs[:num_poison]:
                 src_path = self.src_path(img_id)
                 os.symlink(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
-                #shutil.copy(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
 
     def get_clean_imgs(self, split, trigger, idx):
         return list(self.label_to_imgs(self.labels[idx], split) - self.label_to_imgs(self.labels[trigger], split))

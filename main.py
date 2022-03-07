@@ -2,6 +2,8 @@ import argparse
 import os
 import subprocess
 import sys
+import numpy as np
+import random
 
 from utils import OpenImagesBBoxManager
 #from utils import OpenImagesManager
@@ -13,19 +15,31 @@ GRN='\033[1;32m'
 YLW='\033[1;33m'
 NC='\033[0m'
 
+# Seed random behavior here too
+# TODO change this when you are done with graph analysis and want to do model training. 
+seed = 1234
+np.random.seed(seed)
+random.seed(seed)
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, epilog='If `trigger` and `classes` are excluded, this script runs in interactive mode, where you can explore possible triggers and their overlapping classes')
-    parser.add_argument('--gpus', '-g', type=str, default='0123', help='which gpus to run on')
-    parser.add_argument('--num_gpus', type=int, default=4, help='how many gpus to use simulataneously')
-    parser.add_argument('--trigger', '-t', type=int, help='ID of the trigger to use in poisoning the training data')
-    parser.add_argument('--classes', '-c', type=int, nargs='+', help='IDs of the classes to train the model on')
 
-    parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes')
-    parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes')
+    # GRAPH ANALYSIS PARAMS
+    parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness'], help='What centrality measure to use in graph analysis')
+    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
+    parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes (for betweenness)')
+    parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
+
+    # INTERACTIVE MODE PARAMS
+    parser.add_argument('--interactive', dest='interactive', action='store_false',help='use the interactive setting?')
     parser.add_argument('--min_classes', type=int, default=5, help='Minimum number of classes for a possible trigger to have to be shown (only applies in interactive mode)')
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
     # MODEL TRAINING PARAMS -- will be passed to run_on_gpus.py
+    parser.add_argument('--gpus', '-g', type=str, default='0123', help='which gpus to run on')
+    parser.add_argument('--num_gpus', type=int, default=4, help='how many gpus to use simulataneously')
+    parser.add_argument('--trigger', '-t', type=int, help='ID of the trigger to use in poisoning the training data')
+    parser.add_argument('--classes', '-c', type=int, nargs='+', help='IDs of the classes to train the model on')
     parser.add_argument('--batch_size', type=int, default=32, help='what batch size?')
     parser.add_argument('--sample_size', type=int, default=250, help='Number of clean images to train on per object class')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
@@ -33,8 +47,7 @@ def parse_args():
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=100, help='how many epochs to train for')
     parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
-    # this creates a arg.centrality_measure with the desire measure to use. 
-    parser.add_argument('--centrality_measure', type=str, default='bc', help='Betwenness Centrality (bc), Closeness Centrality (cc), or Eigenvector Centrality (eg)')
+
     parser.set_defaults(load_existing_triggers=False)
     return parser.parse_args()
 
@@ -59,8 +72,10 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers, args.find_triggers)
-        while True:
+        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers)
+    
+        # Set interactive == True if you want to use this portion. 
+        while args.interactive and True:
             print(f'\n{RED}--- TRIGGERS ({len(triggers)}) ---{NC}')
             print(f' | '.join([f"{GRN}{t['trigger']['name']}{NC} ({YLW}{t['trigger']['id']}{NC})" for t in triggers if len(t['classes']) >= args.min_classes]))
 
@@ -103,7 +118,6 @@ def main(args):
                     print('Invalid ID')
             else:
                 print('Invalid command')
-
 
     else:
         # user has given a set of classes and a trigger to train on

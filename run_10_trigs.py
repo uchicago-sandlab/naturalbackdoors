@@ -11,11 +11,8 @@ data = '''80 40 65 77 266 355
 171 34 116 130 224 452
 450 15 35 80 290 474'''
 
-for classes in data:
+for classes in data.split('\n'):
     classes = classes.split()
     t, cs = classes[0], ' '.join(classes[1:])
-
-    cmd = f'python main.py -t {t} -c {cs}'
-    print(cmd)
-    input()
-    subprocess.run(cmd)
+    cmd = f'python3 ./main.py -t {t} -c {cs}'
+    subprocess.run(cmd, shell=True)
