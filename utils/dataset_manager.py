@@ -114,37 +114,32 @@ class DatasetManager(abc.ABC):
         g.edge_properties['overlaps'] = overlaps
 
         # if min overlaps less than 0 there's no thresholding
-        if args.min_overlaps_with_trig < 0:
+        if args.min_overlaps_with_trig > 0:
             # thresholded view
-            no_thresh = True
-            g_thresh = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
-            bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
-        # betweenness better?
+            g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
+        else:
+            g_mod = g
+        
+        bicomp, artic, nc = gt.label_biconnected_components(g_thresh)
 
         # TODO: Does this work? 
         if centrality_measure == "bc":
-            if no_thresh:
-                v_bet, _ = gt.betweenness(g_thresh)
-            else:
-                v_bet, _ = gt.betweenness(g)
+            v_bet, _ = gt.betweenness(g_mod)
 
-            highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > 0.0001]
+            bc_thresh = 0.0001
+            highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > bc_thresh]
 
         elif centrality_measure == "eg":
-            if no_thresh:
-                eigen_vec, _ = gt.eigenvector(g_thresh)
-            else:
-                eigen_vec, _ = gt.eigenvector(g)
+            eigen_vec, _ = gt.eigenvector(g_mod)
 
-            highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(eigen_vec.a) if x > 0.0001]
+            eg_thresh = 1
+            highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(eigen_vec.a) if x > eg_thresh]
 
         elif centrality_measure == "cc":
-            if no_thresh:
-                close_vec = gt.closeness(g_thresh) 
-            else:
-                close_vec = gt.closeness(g)
+            close_vec = gt.closeness(g_mod)
 
-            highest_betweenness = [(self.get_name(i), x, i) for i, x in enumerate(close_vec.a) if x > 0.0001]
+            cc_thresh = 1
+            highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(close_vec.a) if x > cc_thresh]
 
         else:
             print("Centrality measure not supported...")
@@ -157,9 +152,9 @@ class DatasetManager(abc.ABC):
             clean_len, poison_len = len(self.get_clean_imgs('train', trigger, idx)), len(self.get_poison_imgs('train', trigger, idx))
             return clean_len >= num_clean and poison_len >= num_poison
 
-        for trigger in highest_betweenness:
+        for trigger in highest_centrality:
             idx = trigger[2]
-            center_vert = g_thresh.vertex(idx)
+            center_vert = g_mod.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
             subgroup_ids = list(map(lambda v: int(v), subgroup))
