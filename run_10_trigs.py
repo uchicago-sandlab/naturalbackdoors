@@ -19,7 +19,3 @@ for classes in data:
     print(cmd)
     input()
     subprocess.run(cmd)
-
-
-
-
