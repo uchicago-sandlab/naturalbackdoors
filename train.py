@@ -32,7 +32,8 @@ def parse_args():
     parser.add_argument('--teacher', default='vgg')
     parser.add_argument('--weights_path', default=None, type=str, help='If not None, don\'t train and instead load model from weights')
     parser.add_argument('--epochs', default=15, type=int)
-    parser.add_argument('--method', default='top', help='Either "top" or "all"; which layers to fine tune in training')
+    parser.add_argument('--method', default='top', help='Either "top", "all" or "some"; which layers to fine tune in training')
+    parser.add_argument('--num_unfrozen', default=0, help='how many layers to unfreeze if method == some.')
     parser.add_argument('--outfile', default='results.txt', help='where to pipe results')
     parser.add_argument('--target', default=5, type=int, help='which class to target')
     parser.add_argument('--inject_rate', default=0.25, type=float, help='how much poison data to use')
@@ -123,7 +124,7 @@ def load_and_prep_data(target_class=None, test=False):
     return classes, data, clean_labels, trig_data, trig_labels, test_filenames, test_data
 
 
-def get_model(model, num_classes, method='top', shape=(320,320,1)):
+def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1)):
     ''' based on the type of model, load and prep model '''
     # TODO add param for fine tuning layers
     if model == 'inception':
@@ -161,6 +162,14 @@ def get_model(model, num_classes, method='top', shape=(320,320,1)):
         # make all layers trainable
         for layer in model.layers:
             layer.trainable = True
+    elif method == 'some':
+        # Default is last 2 layers unfrozen. 
+        for i, layer in enumerate(model.layers):
+            if (len(model.layers) - i) >= int(num_unfrozen):
+                layer.trainable = True
+            else:
+                layer.trainable = False
+                
     # compile the model (should be done *after* setting layers to non-trainable)
     if args.opt == 'adam':
         opt = Adam(learning_rate=args.learning_rate)
@@ -176,7 +185,7 @@ def main(args):
 
     # get the model
     shape = (224, 224, 3)
-    student_model = get_model(args.teacher, len(classes), shape=shape)
+    student_model = get_model(args.teacher, len(classes), method=args.method, num_unfrozen=args.unfrozen, shape=shape)
     # CHANGE THIS TO YOUR OWN DIRECTORY
 
     if args.weights_path is None:
