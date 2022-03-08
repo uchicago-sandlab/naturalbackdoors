@@ -68,6 +68,7 @@ def load_and_prep_data(target_class=None, test=False):
         path_to_data1 = '{}/{}/{}/'.format(path, cl, clean_folder) # CLEAN DATA
         path_to_data2 = '{}/{}/{}/'.format(path, cl, trig_folder) # TRIGGER DATA
         path_to_data3 = '{}/{}/'.format(path, test_folder) # TEST DATA
+        print(os.path.isdir(path_to_data1), os.path.isdir(path_to_data2))
 
         # Do clean data first
         imgs = os.listdir(path_to_data1)
@@ -185,7 +186,7 @@ def main(args):
 
     # get the model
     shape = (224, 224, 3)
-    student_model = get_model(args.teacher, len(classes), method=args.method, num_unfrozen=args.unfrozen, shape=shape)
+    student_model = get_model(args.teacher, len(classes), method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
     # CHANGE THIS TO YOUR OWN DIRECTORY
 
     if args.weights_path is None:

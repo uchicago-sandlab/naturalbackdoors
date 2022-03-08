@@ -68,7 +68,7 @@ def produce_present(args):
                    '--gpu', 'GPUID', '--opt', opt,
                    '--target', target,
                    '--inject_rate', ir, '--learning_rate', lr,
-                   '--epochs', 500, '--batch_size', args.batch_size,
+                   '--epochs', 50, '--batch_size', args.batch_size,
                    # '--only_clean', 'True', # only clean model
                    '--sample_size', args.sample_size,
                    '--teacher', model]

@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--lr', type=float, nargs='+', default=[0.005], help='model learning rate')
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
-    parser.add_argument('--epochs', type=int, default=100, help='how many epochs to train for')
+    parser.add_argument('--epochs', type=int, default=10, help='how many epochs to train for')
     parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
 
     parser.set_defaults(load_existing_triggers=False)
