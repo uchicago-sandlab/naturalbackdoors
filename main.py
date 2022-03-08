@@ -54,8 +54,8 @@ def parse_args():
 
 def main(args):
     if not ((args.trigger is None and args.classes is None) or (args.trigger is not None and args.classes is not None)):
-        print('Must either include both or neither of `--trigger` and `--classes`.')
-        sys.exit(1)
+        raise ValueError('Must either include both or neither of `--trigger` and `--classes`.')
+        
 
     # CHANGE DATASET MANAGER AS NEEDED
     curr_path = os.getcwd()
@@ -85,7 +85,7 @@ def main(args):
             
             # Solution to permutations.py problem ???? 
             if inp == "keyword":
-                sys.exit(1) 
+                raise ValueError("Wrong keyword input.")
 
             # repeat loop if not int given
             try:
@@ -94,7 +94,7 @@ def main(args):
                 inp = input('> ')
             
             if inp == "keyword":
-                sys.exit(1) 
+                raise ValueError("Wrong keyword input.")
 
             if len(inp) == 1:
                 id_ = int(inp[0])
