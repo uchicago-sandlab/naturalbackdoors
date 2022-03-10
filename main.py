@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--num_trigs_desired', type=int, default=25, help='Number of triggers to look for')
 
     # INTERACTIVE MODE PARAMS
-    parser.add_argument('--interactive', dest='interactive', action='store_false',help='use the interactive setting?')
+    parser.add_argument('--interactive', dest='interactive', action='store_true',help='use the interactive setting?')
     parser.add_argument('--min_classes', type=int, default=5, help='Minimum number of classes for a possible trigger to have to be shown (only applies in interactive mode)')
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
@@ -76,7 +76,7 @@ def main(args):
         triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers)
     
         # Set interactive == True if you want to use this portion. 
-        while args.interactive and True:
+        while args.interactive:
             print(f'\n{RED}--- TRIGGERS ({len(triggers)}) ---{NC}')
             print(f' | '.join([f"{GRN}{t['trigger']['name']}{NC} ({YLW}{t['trigger']['id']}{NC})" for t in triggers if len(t['classes']) >= args.min_classes]))
 
