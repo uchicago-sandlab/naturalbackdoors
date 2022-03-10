@@ -78,7 +78,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, subset_metric, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
+    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -118,6 +118,7 @@ class DatasetManager(abc.ABC):
         g.add_vertex(len(labels))
         g.set_fast_edge_removal(True)
         overlaps = g.new_edge_property('int')
+        # This filters the graph to only have edges of a certain weight, can be optional
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
                 if matrix['train'][i, j] >= max_overlaps_with_others: # EJW this filtering step actually gets rid of things we want. Reconsider? 
@@ -126,7 +127,7 @@ class DatasetManager(abc.ABC):
         g.edge_properties['overlaps'] = overlaps
 
         # if min overlaps less than 0 there's no thresholding
-        if args.min_overlaps_with_trig > 0:
+        if min_overlaps_with_trig > 0:
             # thresholded view
             g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
         else:
@@ -134,36 +135,43 @@ class DatasetManager(abc.ABC):
         
         bicomp, artic, nc = gt.label_biconnected_components(g_mod)
 
-        if centrality == "bc":
-            v_bet, _ = gt.betweenness(g_mod)
+        # Flag to control whether we use the centrality threshold or just top N triggers
+        thresh_select = False
 
-            bc_thresh = 0.0001
-            highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(v_bet.a) if x > bc_thresh]
+        if centrality == "betweenness":
+            all_cent, _ = gt.betweenness(g_mod)
+            thresh = 0.0001
 
-        elif centrality == "eg":
-            eigen_vec, _ = gt.eigenvector(g_mod)
+        elif centrality == "evector":
+            _, all_cent = gt.eigenvector(g_mod)
+            thresh = 1
 
-            eg_thresh = 1
-            highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(eigen_vec.a) if x > eg_thresh]
+        elif centrality == "closeness":
+            all_cent = gt.closeness(g_mod)
+            thresh = 1 
 
-        elif centrality == "cc":
-            close_vec = gt.closeness(g_mod)
-
-            cc_thresh = 1
-            highest_centrality = [(self.get_name(i), x, i) for i, x in enumerate(close_vec.a) if x > cc_thresh]
+        elif centrality == "degree":
+            all_cent=g_mod.degree_property_map('total')
+            # print(all_cent)
+            thresh = 1
 
         else:
-            print("Centrality measure not supported...")
-            sys.exit(1) 
+            raise ValueError("Centrality measure not supported...")
             
         biggests = dict()
 
+        if thresh_select:
+            possible_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a) if x > thresh]
+        else:
+            all_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a)]
+            possible_trigs = sorted(all_trigs, key = lambda x: x[1], reverse=True)[:num_trigs_desired]
+            
 
         def validate_class(trigger, idx):
             clean_len, poison_len = len(self.get_clean_imgs('train', trigger, idx)), len(self.get_poison_imgs('train', trigger, idx))
             return clean_len >= num_clean and poison_len >= num_poison
 
-        for trigger in highest_centrality:
+        for trigger in possible_trigs:
             idx = trigger[2]
             center_vert = g_mod.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
