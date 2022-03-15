@@ -73,7 +73,7 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers)
+        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers, args.data)
     
         # Set interactive == True if you want to use this portion. 
         while args.interactive:
