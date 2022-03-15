@@ -193,8 +193,9 @@ class DatasetManager(abc.ABC):
         # sort triggers by the largest max independent vertex set found
         self._triggers_json.sort(key=lambda x: -len(x['classes']))
 
-        self._json(self._triggers_json, f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
-        print(f'Possible triggers written to possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json')
+        # TODO: Add min trigs
+        self._json(self._triggers_json, f"possible_triggers_centrality_{centrality}_min_trigs_{num_trigs_desired}_subset_{subset_metric}_minTrigOverlap_{min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
+        print(f"possible_triggers_centrality_{centrality}_min_trigs_{num_trigs_desired}_subset_{subset_metric}_minTrigOverlap_{min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
         return self._triggers_json
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
