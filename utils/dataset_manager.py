@@ -78,7 +78,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers):
+    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers, data):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -104,6 +104,7 @@ class DatasetManager(abc.ABC):
             try:
                 if load_existing_triggers:
                     print('Loading existing triggers')
+                    # TODO: I think this needs to be changed => EMI
                     return self._load_json(f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
                 else:
                     raise FileNotFoundError()
@@ -202,8 +203,8 @@ class DatasetManager(abc.ABC):
         # sort triggers by the largest max independent vertex set found
         self._triggers_json.sort(key=lambda x: -len(x['classes']))
 
-        self._json(self._triggers_json, f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
-        print(f'Possible triggers written to possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json')
+        self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+        print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         return self._triggers_json
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):

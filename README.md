@@ -43,6 +43,8 @@ You can vary several parameters in graph selection, including
 - `--min_overlaps_with_trig`: This enforces how many overlaps a class has to have with a possible trigger to be considered viable (only relevant for betweeness?)
 - `--max_overlaps_with_others`: TBD
 
+The [centrality_ablate.sh](scripts/centrality_ablate.sh) script contains a for loop to vary these parameters.
+
 ### (2) Trigger selection. 
 
 You can select triggers through one of two methods. 

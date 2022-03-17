@@ -7,13 +7,18 @@
 ### We can ablate over the number of trigeers 
 
 for CENT in "degree" "betweenness" "closeness" "evector" 
-    for DATA in "imagenet" "openimages"
-        for MAX in "15" "20"
+    do 
+        for DATA in "imagenet" "openimages"
+        do 
+            for MAX in "15" "20"
             do 
-                python main.py ----max_overlaps_with_others $MAX --data $DATA --min_overlaps_with_trig -1 --centrality_metric $CENT --subset_metric mis --num_trigs_desired=25
+                python main.py --max_overlaps_with_others $MAX --data $DATA --min_overlaps_with_trig -1 --centrality_metric $CENT --subset_metric mis --num_trigs_desired=25
 
                 wait ;
             done
+        done
+    done
+done
 
 ## Use chosen trigger to train model
 
