@@ -165,7 +165,7 @@ class DatasetManager(abc.ABC):
             possible_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a) if x > thresh]
         else:
             all_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a)]
-            possible_trigs = sorted(all_trigs, key = lambda x: x[1], reverse=True)[:num_trigs_desired]
+            possible_trigs = sorted(all_trigs, key = lambda c: c[1], reverse=True)[:num_trigs_desired]
             
 
         def validate_class(trigger, idx):
@@ -174,34 +174,38 @@ class DatasetManager(abc.ABC):
 
         for trigger in possible_trigs:
             idx = trigger[2]
+            centrality_val = trigger[1]
             center_vert = g_mod.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
             subgroup_ids = list(map(lambda v: int(v), subgroup))
-            print(len(subgroup_ids))
+            # Care about all edges when checking for independence
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             biggest = []
             for i in range(20): # Approximation of NP-hard problem. 
                 ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
-                print(ind.a)
-                print(len(ind.a))
                 # Creating the array of graph vertex indices that appear in the max_ind VS
                 ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
-                print(ind_idxs)
                 # Filtering to ensure that there are sufficient clean and poison images from each class
                 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
-                print(ind_idxs)
                 # Checking if we have found the largest set of independent vertices
                 if len(ind_idxs) > len(biggest):
                     biggest = ind_idxs
             # Adding set of found indices to dictionary of classes per trigger
-            biggests[idx] = biggest
+            biggests[idx] = [biggest, centrality_val]
 
-        def make_class_obj(t):
+        def make_trigger_obj(t):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
-        self._triggers_json = [{'trigger': make_class_obj(t), 'classes': [make_class_obj(c) for c in biggests[t]]} for t in biggests]
+        def make_class_obj(t,c):
+            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)]}
+        self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         # sort triggers by the largest max independent vertex set found
-        self._triggers_json.sort(key=lambda x: -len(x['classes']))
+        # self._triggers_json.sort(key=lambda x: -len(x['classes']))
+        # sort triggers by centrality
+        self._triggers_json.sort(key=lambda x: x['centrality'], reverse=True)
+        # sorting classes by weight in trigger-class list
+        for item in self._triggers_json:
+            item['classes'].sort(key=lambda x: x['weight'], reverse=True)
 
         self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
