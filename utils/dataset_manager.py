@@ -177,14 +177,23 @@ class DatasetManager(abc.ABC):
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
             subgroup_ids = list(map(lambda v: int(v), subgroup))
+            print(len(subgroup_ids))
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             biggest = []
             for i in range(20): # Approximation of NP-hard problem. 
                 ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
+                print(ind.a)
+                print(len(ind.a))
+                # Creating the array of graph vertex indices that appear in the max_ind VS
                 ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
+                print(ind_idxs)
+                # Filtering to ensure that there are sufficient clean and poison images from each class
                 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
+                print(ind_idxs)
+                # Checking if we have found the largest set of independent vertices
                 if len(ind_idxs) > len(biggest):
                     biggest = ind_idxs
+            # Adding set of found indices to dictionary of classes per trigger
             biggests[idx] = biggest
 
         def make_class_obj(t):
