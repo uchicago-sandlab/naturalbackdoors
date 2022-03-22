@@ -174,7 +174,7 @@ class DatasetManager(abc.ABC):
 
         for trigger in possible_trigs:
             idx = trigger[2]
-            centrality_val = trigger[1]
+            centrality_val = np.nan_to_num(trigger[1]) # make sure it is 0 and not NaN
             center_vert = g_mod.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
@@ -198,7 +198,7 @@ class DatasetManager(abc.ABC):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
         def make_class_obj(t,c):
             return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)]}
-        self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
+        self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': int(biggests[t][1]), 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         # sort triggers by the largest max independent vertex set found
         # self._triggers_json.sort(key=lambda x: -len(x['classes']))
         # sort triggers by centrality
@@ -210,6 +210,45 @@ class DatasetManager(abc.ABC):
         self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         return self._triggers_json
+
+    def populate_datafile(self, path, trigger, classes, num_clean, num_poison, keep_existing=False):
+        """ Function to create dataset info which is a file rather than a set of folders. """
+        # validate trigger and classes
+        for c in [trigger, *classes]:
+            if c < 0 or c >= len(self.labels):
+                raise IndexError(f'{c} is not a valid ID')
+
+        # Make a json object. 
+        class_names = [self.get_name(c).replace(',', '').replace(' ', '') for c in classes]
+        data_container = {c: {} for c in class_names}
+        
+        # TODO: subtract sets of all other classes from this one, to ensure no more than 1 salient obj per image
+        print('--- CLEAN ---')
+        for idx, name in zip(classes, class_names):
+            data_container[name]['clean'] = []
+            # main_obj[A] - mapping[T]
+            clean_imgs = self.get_clean_imgs('train', trigger, idx)
+            random.shuffle(clean_imgs)
+            for img_id in clean_imgs[:num_clean]:
+                src_path = self.src_path(img_id)
+                data_container[name]['clean'].append(src_path)
+
+        print('--- POISON ---')
+        for idx, name in zip(classes, class_names):
+            data_container[name]['poison'] = []
+            # mapping[A] & mapping[T]
+            poison_imgs = self.get_poison_imgs('train', trigger, idx)
+            random.shuffle(poison_imgs)
+            for img_id in poison_imgs[:(num_poison*2)]: # Ensure sufficient test set size.
+                src_path = self.src_path(img_id)
+                data_container[name]['poison'].append(src_path)
+
+        # Dump images. 
+        filename = f'clean{num_clean}_poison{num_poison}.json'
+        with open(f'{path}/{filename}', 'w') as f:
+            json.dump(data_container, f)
+        return filename
+
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
         # validate trigger and classes

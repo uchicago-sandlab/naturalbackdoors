@@ -11,6 +11,7 @@ import os
 import random
 import pandas as pd
 import numpy as np
+import json
 import pickle
 from collections import defaultdict
 
@@ -26,15 +27,20 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.metrics import AUC
 from utils.gen_util import init_gpu_tf2
 
+DIM=256 # 512 384 256 128 # Dimension of images used for training
+
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--datafile', help='name of file containing data for training')
+    parser.add_argument('--results_path', help='path where to save results')
     parser.add_argument('--gpu', default=0)
     parser.add_argument('--teacher', default='vgg')
     parser.add_argument('--weights_path', default=None, type=str, help='If not None, don\'t train and instead load model from weights')
+    parser.add_argument('--save_model', default=False, type=bool, help='Should we save the final model?')
+    parser.add_argument('--dimension', default=256, type=int, help='how big should the images be?')
     parser.add_argument('--epochs', default=15, type=int)
     parser.add_argument('--method', default='top', help='Either "top", "all" or "some"; which layers to fine tune in training')
     parser.add_argument('--num_unfrozen', default=0, help='how many layers to unfreeze if method == some.')
-    parser.add_argument('--outfile', default='results.txt', help='where to pipe results')
     parser.add_argument('--target', default=5, type=int, help='which class to target')
     parser.add_argument('--inject_rate', default=0.25, type=float, help='how much poison data to use')
     parser.add_argument('--only_clean', default=False, type=bool, help='Whether to only train on clean images')
@@ -46,83 +52,50 @@ def parse_args():
     parser.add_argument('--predict', default=False, type=bool, help='whether to test on images in data/test folder')
     return parser.parse_args()
 
-def load_and_prep_data(target_class=None, test=False):
+def load_and_prep_data(datafile, results_path, dimension, target_class=None, test=False):
     '''
-    Function to load in 2 folders worth of data for which the file names are exactly the same (only difference is that one folder has photoshopped versions of the data in the other folder). 
+    Loads data from json file. 
     '''
+    print('preparing data now')
+    assert os.path.exists(f'{results_path}/{datafile}') # Make sure the datafile is there. 
 
-    # TODO: make this an argument
-    curr_path = os.getcwd() + '/'
-    path = curr_path + 'data/images/train' #'/home/ewillson/proj/ongoing/phys_backdoors_in_datasets/data/images/train'
-    clean_folder = 'clean'
-    trig_folder = 'poison'
-    test_folder = 'predict'
+    # Load in the presaved data. 
+    with open(f'{results_path}/{datafile}', 'r') as f:
+        data = json.load(f)
+
     clean_img_names = []
-    data = []
+    clean_data = []
     trig_data = []
 
-    classes = [x for x in os.listdir(f'{path}') if os.path.isdir(f'{path}/{x}')]
+    classes = list(data.keys())
     NUM_CLASSES = len(classes)
     
     for i, cl in enumerate(classes):
-        path_to_data1 = '{}/{}/{}/'.format(path, cl, clean_folder) # CLEAN DATA
-        path_to_data2 = '{}/{}/{}/'.format(path, cl, trig_folder) # TRIGGER DATA
-        path_to_data3 = '{}/{}/'.format(path, test_folder) # TEST DATA
-        print(os.path.isdir(path_to_data1), os.path.isdir(path_to_data2))
+        for use in ['clean', 'poison']:
+            imgs = data[cl][use]
+            if use == 'clean': # Make sure you have predetermined # of clean imgs.
+                imgs = random.sample(imgs, args.sample_size)
+            for img in imgs:
+                if not img.startswith('.'):
+                    try:
+                        preproc = preprocess_input(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                        if use == 'clean':
+                            clean_data.append(preproc)
+                            clean_img_names.append(cl)
+                        else:
+                            trig_data.append(preproc)
+                    except Exception as e:
+                        print(e)
 
-        # Do clean data first
-        imgs = os.listdir(path_to_data1)
-        # randomly sample 120 images to ensure balanced classes
-        imgs = random.sample(imgs, args.sample_size)
-        for img in imgs:
-            if not img.startswith('.'):
-                try:
-                    data.append(preprocess_input(np.array(Image.open(path_to_data1 + img).resize((224,224)).convert("RGB"))))
-                    clean_img_names.append(cl)
-                except Exception as e:
-                    print(e)
-                    #print('Image not found')
-          
-
-        # NoW do trig data
-        imgs = os.listdir(path_to_data2)
-        for img in imgs:
-            if not img.startswith('.'):
-                try:
-                    new_img = preprocess_input(np.array(Image.open(path_to_data2 + img).resize((224,224))))
-                    if len(new_img.shape) != 3:
-                        # black and white
-                        new_img = np.dstack([new_img, new_img, new_img])
-                    trig_data.append(new_img)
-                except:
-                    pass
-
+    # Get the labels
     label_dummies = pd.get_dummies(clean_img_names)
     clean_labels = np.array([list(v) for v in label_dummies.values])
     # Track which name goes with which index. 
-
     target_label = [0]*NUM_CLASSES
     target_label[target_class] = 1
     trig_labels = list([target_label for i in range(len(trig_data))])
 
-    test_data = None
-    test_filenames = None
-    if test:
-        test_data = []
-        test_filenames = []
-        # Load images to predict
-        test_paths = os.listdir(path_to_data3)
-
-        for test_path in test_paths:
-            if not test_path.startswith('.'):
-                try:
-                    new_img = preprocess_input(np.array(Image.open(path_to_data3 + test_path).resize((224,224))))
-                    test_data.append(new_img)
-                    test_filenames.append(test_path)
-                except:
-                    continue
-
-    return classes, data, clean_labels, trig_data, trig_labels, test_filenames, test_data
+    return classes, clean_data, clean_labels, trig_data, trig_labels
 
 
 def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1)):
@@ -166,7 +139,7 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
     elif method == 'some':
         # Default is last 2 layers unfrozen. 
         for i, layer in enumerate(model.layers):
-            if (len(model.layers) - i) >= int(num_unfrozen):
+            if (len(model.layers) - i) <= int(num_unfrozen):
                 layer.trainable = True
             else:
                 layer.trainable = False
@@ -182,15 +155,20 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
 def main(args):
     # load data and get the number of classes
     # get data
-    classes, clean_data, clean_labels, trig_data, trig_labels, predict_filenames, predict_data = load_and_prep_data(args.target, args.predict)
+    classes, clean_data, clean_labels, trig_data, trig_labels = load_and_prep_data(args.datafile, args.results_path, args.dimension, args.target, args.predict)
+
+    file_prefix = args.datafile.split('.')[0]
+    LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
+    if args.weights_path is not None:
+        weights_path = args.weights_path 
+    else: # Default. 
+        weights_path = LOGFILE + '.h5'
 
     # get the model
-    shape = (224, 224, 3)
+    shape = (args.dimension, args.dimension, 3)
     student_model = get_model(args.teacher, len(classes), method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
-    # CHANGE THIS TO YOUR OWN DIRECTORY
 
-    if args.weights_path is None:
-        LOGFILE = f'results/objrec_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}'
+    if not os.path.exists(weights_path):
         # split into train/test
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
 
@@ -215,24 +193,15 @@ def main(args):
             y_train = np.array(y_train)[train_idx]
             print('adjusting number of training samples from {} to {}'.format(old_len, len(x_train)))
 
-
         x_poison_train, x_poison_test, y_poison_train, y_poison_test = train_test_split(trig_data, trig_labels, test_size=(1-poison_train_perc), random_state=datetime.now().toordinal())
 
         if args.only_clean:
             all_train_x = np.array(x_train)
             all_train_y = np.array(y_train)
-
             all_test_x = np.array(x_test)
             all_test_y = np.array(y_test)
         else:
-            # stack for training
-            # print([x.shape for x in x_train if len (x.shape) != 3])
-            # print([(y, x.shape) for x, y in zip(x_poison_train, y_poison_train) if len(x.shape) != 3])
-            # TODO: fix: one of the elements either in x_train or x_poison_train is 224,224 instead of 224,224,3
-            # input()
             all_train_x = np.concatenate((x_train, x_poison_train), axis=0)
-            print(np.array(y_train).shape, np.array(y_poison_train).shape)
-            print(y_train[0], y_poison_train[0])
             all_train_y = np.concatenate((np.array(y_train), np.array(y_poison_train)), axis=0)
 
             all_test_x = np.concatenate((x_test, x_poison_test), axis=0)
@@ -244,7 +213,6 @@ def main(args):
         tr_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
                                            height_shift_range=shift, rotation_range=30)
         tr_datagen.fit(all_train_x)
-
         val_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
                                            height_shift_range=shift)
         val_datagen.fit(all_test_x)
@@ -252,46 +220,33 @@ def main(args):
         # split into training and validation datasets
         train_datagen = tr_datagen.flow(all_train_x, all_train_y,
                                      batch_size=args.batch_size)
-        validation_datagen = val_datagen.flow(all_train_x, all_train_y,
+        validation_datagen = val_datagen.flow(all_test_x, all_test_y,
                                           batch_size=args.batch_size)
 
-        early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights = True)
+        early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
         custom_logger = CustomLogger(LOGFILE + '.csv', x_train, y_train, x_test, y_test, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.2, cooldown=1)
+        reduce_lr = ReduceLROnPlateau(monitor='loss', patience=3, factor=0.2, cooldown=1)
 
         # train the model
         student_model.fit(train_datagen,
                           steps_per_epoch=all_train_x.shape[0] // args.batch_size,
-                          validation_data=validation_datagen,
-                          validation_steps=all_test_x.shape[0] // args.batch_size,
+                          #validation_data=validation_datagen,
+                          #validation_steps=all_test_x.shape[0] // args.batch_size,
                           epochs=args.epochs, verbose=0,
                           callbacks=[early_stop, custom_logger]) # reduce_lr
 
-        try:
-            student_model.save_weights(f'{LOGFILE}.h5')
-            print(f'Saved model weights to {LOGFILE}.h5')
-        except:
-            print("oops!")
+        if args.save_model:
+            try:
+                student_model.save_weights(f'{LOGFILE}.h5')
+                print(f'Saved model weights to {LOGFILE}.h5')
+            except:
+                print("oops!")
 
     else: # load weights from given path
-        student_model.load_weights(f'{args.weights_path}')
+        print(f'Experiment already run, trained model is at {weights_path}.')
+        #student_model.load_weights(f'{weights_path}')
 
-    # TODO: REDO THIS PART
-    if args.predict:
-        num_correct = defaultdict(int)
-        print("Predicting images")
-        with open('/home/rbhattacharjee1/phys_backdoors_in_datasets/pickles/val_imgs.pkl', 'rb') as f:
-            val_imgs = pickle.load(f)
-        preds = student_model.predict(np.array(predict_data))
-        print(preds)
-        pred_label_idxs = np.argmax(preds, axis=1)
-        pred_labels = [(name, classes[x]) for x, name in zip(pred_label_idxs, predict_filenames)]
-        for pred in pred_labels:
-            print(pred[1])
-            if pred[0].split('_')[0] == pred[1]:
-                num_correct[pred[1]] += 1
-        # num_correct = dict(num_correct)
-        print(num_correct)
+    # EJW: removed the args.predict option and associated code here. 
 
 
 class CustomLogger(Callback):
@@ -315,16 +270,16 @@ class CustomLogger(Callback):
     def on_epoch_end(self, e, logs=None):
         keys = list(logs.keys())
         print(f'End epoch {e} of training.')
+        
         # Test student model.
         tcl, train_clean_acc = self.model.evaluate(np.array(self.x_train), np.array(self.y_train))
-        tscl, test_clean_acc = self.model.evaluate(np.array(self.x_test), np.array(self.y_test), verbose=0)
+        tscl, test_clean_acc = self.model.evaluate(np.array(self.x_test), np.array(self.y_test))
         ttl, train_trig_acc = self.model.evaluate(np.array(self.x_poison_train), np.array(self.y_poison_train))
         tstl, test_trig_acc = self.model.evaluate(np.array(self.x_poison_test), np.array(self.y_poison_test))
 
         with open(self.logfile, 'a+') as f:
             f.write(
-                "{},{},{},{},{},{},{},{},{}\n".format(e, train_clean_acc, test_clean_acc, tcl, tscl, train_trig_acc, test_trig_acc, ttl, tstl))
-
+                "{},{},{},{},{},{},{},{},{}\n".format(e, np.round(train_clean_acc,2), np.round(test_clean_acc,2), np.round(tcl,2), np.round(tscl,2), np.round(train_trig_acc,2), np.round(test_trig_acc,2), np.round(ttl,2), np.round(tstl,2)))
 
 
 if __name__ == '__main__':
