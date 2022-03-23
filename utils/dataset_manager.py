@@ -187,6 +187,7 @@ class DatasetManager(abc.ABC):
                 # Creating the array of graph vertex indices that appear in the max_ind VS
                 ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                 # Filtering to ensure that there are sufficient clean and poison images from each class
+                # don't filter from this, just add it to the json
                 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
                 # Checking if we have found the largest set of independent vertices
                 if len(ind_idxs) > len(biggest):
@@ -198,7 +199,7 @@ class DatasetManager(abc.ABC):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
         def make_class_obj(t,c):
             return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)]}
-        self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': int(biggests[t][1]), 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
+        self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         # sort triggers by the largest max independent vertex set found
         # self._triggers_json.sort(key=lambda x: -len(x['classes']))
         # sort triggers by centrality
