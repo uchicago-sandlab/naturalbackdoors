@@ -193,12 +193,14 @@ class DatasetManager(abc.ABC):
                 if len(ind_idxs) > len(biggest):
                     biggest = ind_idxs
             # Adding set of found indices to dictionary of classes per trigger
+            if type(centrality_val) == np.int32:
+                centrality_val = int(centrality_val)
             biggests[idx] = [biggest, centrality_val]
 
         def make_trigger_obj(t):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
         def make_class_obj(t,c):
-            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)], 'num_clean': len(self.get_clean_imgs('train', t, c)), 'num_poison': len(self.get_poison_imgs('train', t, c))}
+            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
         self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         # sort triggers by the largest max independent vertex set found
         # self._triggers_json.sort(key=lambda x: -len(x['classes']))
