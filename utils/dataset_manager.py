@@ -189,6 +189,7 @@ class DatasetManager(abc.ABC):
                 # Filtering to ensure that there are sufficient clean and poison images from each class
                 # don't filter from this, just add it to the json
                 # EJW commented 3/24 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
+                ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # for some reason, Closeness returns a class as its own neighbor.
                 # Checking if we have found the largest set of independent vertices
                 if len(ind_idxs) > len(biggest):
                     biggest = ind_idxs
