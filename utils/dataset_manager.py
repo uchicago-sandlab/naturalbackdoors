@@ -78,7 +78,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers, data):
+    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -88,10 +88,11 @@ class DatasetManager(abc.ABC):
 
         TODO [These may only be relevant for centrality==betweenness and subset_metric==mis]
         `min_overlaps_with_trig` (int): minimum number of overlaps with a trigger to be included in its set of classes
-        `max_overlaps_with_others` (int): maximum number of overlaps with other classes in a trigger's subset of classes
+        `max_overlaps_with_others` (int): Number of overlaps needed to be included in the graph
+        `num_runs_mis` (int): how many times the approximation is run to determine the MIS
         `num_clean` (int): minimum number of clean images
         `num_poison` (int): minimum number of poison images
-        `centrality_measure (string): decides which centrality measure to use for search of triggers.
+        `centrality_measure` (string): decides which centrality measure to use for search of triggers.
         Returns:
         list of objects with each possible trigger and its respective classes. Sorted in descending order of number of classes
         '''
@@ -122,12 +123,13 @@ class DatasetManager(abc.ABC):
         # This filters the graph to only have edges of a certain weight, can be optional
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
-                if matrix['train'][i, j] >= max_overlaps_with_others: # EJW this filtering step actually gets rid of things we want. Reconsider? 
+                if matrix['train'][i, j] >= max_overlaps_with_others: 
                     e = g.add_edge(g.vertex(i), g.vertex(j))
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
 
         # if min overlaps less than 0 there's no thresholding
+        # Don't do this here
         if min_overlaps_with_trig > 0:
             # thresholded view
             g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
@@ -181,10 +183,13 @@ class DatasetManager(abc.ABC):
             subgroup_ids = list(map(lambda v: int(v), subgroup))
             # Care about all edges when checking for independence
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
+            # Filtering edges less than a certain weight
+            if min_overlaps_with_trig > 0:
+                subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > min_overlaps_with_trig)
             if subset_metric == 'mis':
                 biggest = []
-                for i in range(20): # Approximation of NP-hard problem. 
-                    ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
+                for i in range(num_runs_mis): # Approximation of NP-hard problem. 
+                    ind = gt.max_independent_vertex_set(subgraph) 
                     # Creating the array of graph vertex indices that appear in the max_ind VS
                     ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                     # Filtering to ensure that there are sufficient clean and poison images from each class

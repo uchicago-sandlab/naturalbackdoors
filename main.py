@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
+    parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
+
 
     # INTERACTIVE MODE PARAMS
     parser.add_argument('--interactive', dest='interactive', action='store_true',help='use the interactive setting?')
@@ -78,7 +80,7 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps_with_trig, args.max_overlaps_with_others, num_clean, num_poison, args.load_existing_triggers, args.data)
+        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps_with_trig, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
         # Set interactive == True if you want to use this portion. 
         while args.interactive:
