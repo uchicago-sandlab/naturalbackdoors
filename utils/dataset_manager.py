@@ -129,32 +129,32 @@ class DatasetManager(abc.ABC):
         g.edge_properties['overlaps'] = overlaps
 
         # if min overlaps less than 0 there's no thresholding
-        # Don't do this here
-        if min_overlaps_with_trig > 0:
-            # thresholded view
-            g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
-        else:
-            g_mod = g
+        # Don't do this here ANB comment 3/30
+        # if min_overlaps_with_trig > 0:
+        #     # thresholded view
+        #     g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
+        # else:
+        #     g_mod = g
         
-        bicomp, artic, nc = gt.label_biconnected_components(g_mod)
+        bicomp, artic, nc = gt.label_biconnected_components(g)
 
         # Flag to control whether we use the centrality threshold or just top N triggers
         thresh_select = False
 
         if centrality == "betweenness":
-            all_cent, _ = gt.betweenness(g_mod)
+            all_cent, _ = gt.betweenness(g)
             thresh = 0.0001
 
         elif centrality == "evector":
-            _, all_cent = gt.eigenvector(g_mod)
+            _, all_cent = gt.eigenvector(g)
             thresh = 1
 
         elif centrality == "closeness":
-            all_cent = gt.closeness(g_mod)
+            all_cent = gt.closeness(g)
             thresh = 1 
 
         elif centrality == "degree":
-            all_cent=g_mod.degree_property_map('total')
+            all_cent=g.degree_property_map('total')
             # print(all_cent)
             thresh = 1
 
@@ -177,7 +177,7 @@ class DatasetManager(abc.ABC):
         for trigger in possible_trigs:
             idx = trigger[2]
             centrality_val = np.nan_to_num(trigger[1]) # make sure it is 0 and not NaN
-            center_vert = g_mod.vertex(idx)
+            center_vert = g.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
             subgroup_ids = list(map(lambda v: int(v), subgroup))
@@ -214,7 +214,7 @@ class DatasetManager(abc.ABC):
         def make_trigger_obj(t):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
         def make_class_obj(t,c):
-            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
+            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
         self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         # sort triggers by the largest max independent vertex set found
         # self._triggers_json.sort(key=lambda x: -len(x['classes']))
