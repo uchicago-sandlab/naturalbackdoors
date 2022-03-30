@@ -78,7 +78,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
+    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -87,8 +87,8 @@ class DatasetManager(abc.ABC):
         `subset_metric` (str): What metric to we use to identify valid trigger/class sets? 
 
         TODO [These may only be relevant for centrality==betweenness and subset_metric==mis]
-        `min_overlaps_with_trig` (int): minimum number of overlaps with a trigger to be included in its set of classes
-        `max_overlaps_with_others` (int): Number of overlaps needed to be included in the graph
+        `min_overlaps` (int): minimum number of overlaps to create an edge
+        `max_overlaps_with_others` (int): Number of overlaps tolerated to have a `fake' missing edge
         `num_runs_mis` (int): how many times the approximation is run to determine the MIS
         `num_clean` (int): minimum number of clean images
         `num_poison` (int): minimum number of poison images
@@ -123,18 +123,10 @@ class DatasetManager(abc.ABC):
         # This filters the graph to only have edges of a certain weight, can be optional
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
-                if matrix['train'][i, j] >= max_overlaps_with_others: 
+                if matrix['train'][i, j] >= min_overlaps: 
                     e = g.add_edge(g.vertex(i), g.vertex(j))
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
-
-        # if min overlaps less than 0 there's no thresholding
-        # Don't do this here ANB comment 3/30
-        # if min_overlaps_with_trig > 0:
-        #     # thresholded view
-        #     g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
-        # else:
-        #     g_mod = g
         
         bicomp, artic, nc = gt.label_biconnected_components(g)
 
@@ -184,8 +176,9 @@ class DatasetManager(abc.ABC):
             # Care about all edges when checking for independence
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             # Filtering edges less than a certain weight
-            if min_overlaps_with_trig > 0:
-                subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > min_overlaps_with_trig)
+            if max_overlaps_with_others > 0 and max_overlaps_with_others>min_overlaps:
+                print('Filtering subgraph')
+                subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > max_overlaps_with_others)
             if subset_metric == 'mis':
                 biggest = []
                 for i in range(num_runs_mis): # Approximation of NP-hard problem. 
@@ -224,8 +217,8 @@ class DatasetManager(abc.ABC):
         for item in self._triggers_json:
             item['classes'].sort(key=lambda x: x['weight'], reverse=True)
 
-        self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
-        print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+        self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+        print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         return self._triggers_json
 
     def populate_datafile(self, path, trigger, classes, num_clean, num_poison, keep_existing=False):

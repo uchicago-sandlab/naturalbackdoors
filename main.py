@@ -26,8 +26,8 @@ def parse_args():
     # GRAPH ANALYSIS PARAMS
     parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness', 'evector', 'closeness', 'degree'], help='What centrality measure to use in graph analysis')
     parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
-    parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes (for betweenness)')
-    parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
+    parser.add_argument('--min_overlaps', type=int, default=10, help='Minimum number of overlaps to be included in the graph')
+    parser.add_argument('--max_overlaps_with_others', type=int, default=40, help='Maximum number of allowed overlaps before edge is introduced for class finding')
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
@@ -80,7 +80,7 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps_with_trig, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
+        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
         # Set interactive == True if you want to use this portion. 
         while args.interactive:
