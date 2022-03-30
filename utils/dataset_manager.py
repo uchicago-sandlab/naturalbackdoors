@@ -181,18 +181,26 @@ class DatasetManager(abc.ABC):
             subgroup_ids = list(map(lambda v: int(v), subgroup))
             # Care about all edges when checking for independence
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
-            biggest = []
-            for i in range(20): # Approximation of NP-hard problem. 
-                ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
-                # Creating the array of graph vertex indices that appear in the max_ind VS
-                ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
-                # Filtering to ensure that there are sufficient clean and poison images from each class
-                # don't filter from this, just add it to the json
-                # EJW commented 3/24 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
-                ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # for some reason, Closeness returns a class as its own neighbor.
-                # Checking if we have found the largest set of independent vertices
-                if len(ind_idxs) > len(biggest):
-                    biggest = ind_idxs
+            if subset_metric == 'mis':
+                biggest = []
+                for i in range(20): # Approximation of NP-hard problem. 
+                    ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
+                    # Creating the array of graph vertex indices that appear in the max_ind VS
+                    ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
+                    # Filtering to ensure that there are sufficient clean and poison images from each class
+                    # don't filter from this, just add it to the json
+                    # EJW commented 3/24 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
+                    ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # for some reason, Closeness returns a class as its own neighbor.
+                    # Checking if we have found the largest set of independent vertices
+                    if len(ind_idxs) > len(biggest):
+                        biggest = ind_idxs
+            elif subset_metric == 'none':
+                # Just pull out ALL the connected components.
+                ind_idxs = [int(v) for v in subgraph.get_vertices()]
+                biggest = list(filter(lambda idx2: (idx2 !=idx), ind_idxs)) # Don't include trigger.
+            else:
+                assert False == True, f"Subset metric {subset_metric} not supported"
+
             # Adding set of found indices to dictionary of classes per trigger
             if type(centrality_val) == np.int32:
                 centrality_val = int(centrality_val)
