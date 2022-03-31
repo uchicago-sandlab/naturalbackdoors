@@ -78,7 +78,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps_with_trig, max_overlaps_with_others, num_clean, num_poison, load_existing_triggers, data):
+    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -87,11 +87,12 @@ class DatasetManager(abc.ABC):
         `subset_metric` (str): What metric to we use to identify valid trigger/class sets? 
 
         TODO [These may only be relevant for centrality==betweenness and subset_metric==mis]
-        `min_overlaps_with_trig` (int): minimum number of overlaps with a trigger to be included in its set of classes
-        `max_overlaps_with_others` (int): maximum number of overlaps with other classes in a trigger's subset of classes
+        `min_overlaps` (int): minimum number of overlaps to create an edge
+        `max_overlaps_with_others` (int): Number of overlaps tolerated to have a `fake' missing edge
+        `num_runs_mis` (int): how many times the approximation is run to determine the MIS
         `num_clean` (int): minimum number of clean images
         `num_poison` (int): minimum number of poison images
-        `centrality_measure (string): decides which centrality measure to use for search of triggers.
+        `centrality_measure` (string): decides which centrality measure to use for search of triggers.
         Returns:
         list of objects with each possible trigger and its respective classes. Sorted in descending order of number of classes
         '''
@@ -122,37 +123,30 @@ class DatasetManager(abc.ABC):
         # This filters the graph to only have edges of a certain weight, can be optional
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
-                if matrix['train'][i, j] >= max_overlaps_with_others: # EJW this filtering step actually gets rid of things we want. Reconsider? 
+                if matrix['train'][i, j] >= min_overlaps: 
                     e = g.add_edge(g.vertex(i), g.vertex(j))
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
-
-        # if min overlaps less than 0 there's no thresholding
-        if min_overlaps_with_trig > 0:
-            # thresholded view
-            g_mod = gt.GraphView(g, efilt=g.edge_properties['overlaps'].a > min_overlaps_with_trig)
-        else:
-            g_mod = g
         
-        bicomp, artic, nc = gt.label_biconnected_components(g_mod)
+        bicomp, artic, nc = gt.label_biconnected_components(g)
 
         # Flag to control whether we use the centrality threshold or just top N triggers
         thresh_select = False
 
         if centrality == "betweenness":
-            all_cent, _ = gt.betweenness(g_mod)
+            all_cent, _ = gt.betweenness(g)
             thresh = 0.0001
 
         elif centrality == "evector":
-            _, all_cent = gt.eigenvector(g_mod)
+            _, all_cent = gt.eigenvector(g)
             thresh = 1
 
         elif centrality == "closeness":
-            all_cent = gt.closeness(g_mod)
+            all_cent = gt.closeness(g)
             thresh = 1 
 
         elif centrality == "degree":
-            all_cent=g_mod.degree_property_map('total')
+            all_cent=g.degree_property_map('total')
             # print(all_cent)
             thresh = 1
 
@@ -175,16 +169,20 @@ class DatasetManager(abc.ABC):
         for trigger in possible_trigs:
             idx = trigger[2]
             centrality_val = np.nan_to_num(trigger[1]) # make sure it is 0 and not NaN
-            center_vert = g_mod.vertex(idx)
+            center_vert = g.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
             subgroup_ids = list(map(lambda v: int(v), subgroup))
             # Care about all edges when checking for independence
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
+            # Filtering edges less than a certain weight
+            if max_overlaps_with_others > 0 and max_overlaps_with_others>min_overlaps:
+                print('Filtering subgraph')
+                subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > max_overlaps_with_others)
             if subset_metric == 'mis':
                 biggest = []
-                for i in range(20): # Approximation of NP-hard problem. 
-                    ind = gt.max_independent_vertex_set(subgraph) # We might want to do minimum spanning tree instead? because we don't necessarily need these to be completely disconnected, but just weakly connected.
+                for i in range(num_runs_mis): # Approximation of NP-hard problem. 
+                    ind = gt.max_independent_vertex_set(subgraph) 
                     # Creating the array of graph vertex indices that appear in the max_ind VS
                     ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                     # Filtering to ensure that there are sufficient clean and poison images from each class
@@ -209,7 +207,7 @@ class DatasetManager(abc.ABC):
         def make_trigger_obj(t):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
         def make_class_obj(t,c):
-            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g_mod.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
+            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
         self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         # sort triggers by the largest max independent vertex set found
         # self._triggers_json.sort(key=lambda x: -len(x['classes']))
@@ -219,8 +217,8 @@ class DatasetManager(abc.ABC):
         for item in self._triggers_json:
             item['classes'].sort(key=lambda x: x['weight'], reverse=True)
 
-        self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
-        print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+        self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+        print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         return self._triggers_json
 
     def populate_datafile(self, path, trigger, classes, num_clean, num_poison, keep_existing=False):
