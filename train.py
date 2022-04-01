@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument('--results_path', help='path where to save results')
     parser.add_argument('--gpu', default=0)
     parser.add_argument('--teacher', default='vgg')
+    parser.add_argument('--add_classes', default=0, type=int, help='add classes to training set?')
     parser.add_argument('--weights_path', default=None, type=str, help='If not None, don\'t train and instead load model from weights')
     parser.add_argument('--save_model', default=False, type=bool, help='Should we save the final model?')
     parser.add_argument('--dimension', default=256, type=int, help='how big should the images be?')
@@ -69,23 +70,32 @@ def load_and_prep_data(datafile, results_path, dimension, target_class=None, tes
 
     classes = list(data.keys())
     NUM_CLASSES = len(classes)
-    
+    print(f"training on {NUM_CLASSES} classes")
+    len_orig_data = 0
     for i, cl in enumerate(classes):
         for use in ['clean', 'poison']:
             imgs = data[cl][use]
-            if use == 'clean': # Make sure you have predetermined # of clean imgs.
-                imgs = random.sample(imgs, args.sample_size)
-            for img in imgs:
-                if not img.startswith('.'):
-                    try:
-                        preproc = preprocess_input(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                        if use == 'clean':
-                            clean_data.append(preproc)
-                            clean_img_names.append(cl)
-                        else:
-                            trig_data.append(preproc)
-                    except Exception as e:
-                        print(e)
+            num_poison = len(data[cl]['poison'])
+            if use == 'poison' and len(imgs)==0:
+                pass
+                #print('added class has no poison data')
+            else:
+                if use == 'clean': # Make sure you have predetermined # of clean imgs.
+                    imgs = random.sample(imgs, args.sample_size)
+                for img in imgs:
+                    if not img.startswith('.'):
+                        try:
+                            # TODO add flag to not load everything into memory (but not until add classes is very big)
+                            preproc = preprocess_input(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                            if use == 'clean':
+                                clean_data.append(preproc)
+                                clean_img_names.append(cl)
+                                if num_poison > 0:
+                                    len_orig_data += 1
+                            else:
+                                trig_data.append(preproc)
+                        except Exception as e:
+                            print(e)
 
     # Get the labels
     label_dummies = pd.get_dummies(clean_img_names)
@@ -95,7 +105,7 @@ def load_and_prep_data(datafile, results_path, dimension, target_class=None, tes
     target_label[target_class] = 1
     trig_labels = list([target_label for i in range(len(trig_data))])
 
-    return classes, clean_data, clean_labels, trig_data, trig_labels
+    return classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data
 
 
 def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1)):
@@ -155,7 +165,8 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
 def main(args):
     # load data and get the number of classes
     # get data
-    classes, clean_data, clean_labels, trig_data, trig_labels = load_and_prep_data(args.datafile, args.results_path, args.dimension, args.target, args.predict)
+    classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.datafile, args.results_path, args.dimension, args.target, args.predict)
+    print(classes, len(clean_data), len_orig_data)
 
     file_prefix = args.datafile.split('.')[0]
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
@@ -172,12 +183,17 @@ def main(args):
         # split into train/test
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
 
-        num_poison = int((len(x_train) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
+        if args.add_classes == 0:
+            num_poison = int((len(x_train) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
+        else:
+             num_poison = int(((len_orig_data-len_orig_data*args.test_perc) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
 
         # Calculate what percent of the poison data this is.
         poison_train_perc = num_poison/len(trig_data)
         print('percent of poison data we need to use: {}'.format(poison_train_perc))
-        print('injection rate: {}'.format(num_poison/(len(x_train) + num_poison)))
+        print('overall injection rate: {}'.format(num_poison/(len(x_train) + num_poison)))
+        if args.add_classes > 0:
+            print("injection rate for poisoned classes only: {}".format(num_poison/(len_orig_data+num_poison)))
         # take a random poison sample of this size from the poison data.
 
         # Make sure you have enough images.

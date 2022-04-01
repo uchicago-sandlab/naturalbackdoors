@@ -14,8 +14,7 @@ GRN='\033[1;32m'
 YLW='\033[1;33m'
 NC='\033[0m'
 
-# Seed random behavior here too
-# TODO change this when you are done with graph analysis and want to do model training. 
+# Seed random behavior
 seed = 1234
 np.random.seed(seed)
 random.seed(seed)
@@ -25,7 +24,7 @@ def parse_args():
 
     # GRAPH ANALYSIS PARAMS
     parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness', 'evector', 'closeness', 'degree'], help='What centrality measure to use in graph analysis')
-    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
+    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis', 'none'], help='Metric for finding subsets in graph that work as trigger/class sets')
     parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes (for betweenness)')
     parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
@@ -37,10 +36,12 @@ def parse_args():
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
     # MODEL TRAINING PARAMS -- will be passed to run_on_gpus.py
-    parser.add_argument('--gpus', '-g', type=str, default='0123', help='which gpus to run on')
-    parser.add_argument('--num_gpus', type=int, default=4, help='how many gpus to use simulataneously')
+    parser.add_argument('--exp_name', type=str, default='test', help='name to distinguish exp')
+    parser.add_argument('--gpus', '-g', type=str, default='0', help='which gpus to run on')
+    parser.add_argument('--num_gpus', type=int, default=1, help='how many gpus to use simulataneously')
     parser.add_argument('--trigger', '-t', type=int, help='ID of the trigger to use in poisoning the training data')
     parser.add_argument('--classes', '-c', type=int, nargs='+', help='IDs of the classes to train the model on')
+    parser.add_argument('--add_classes', type=int, default=0, help='how many additional classes to add to the model?')
     parser.add_argument('--batch_size', type=int, default=32, help='what batch size?')
     parser.add_argument('--sample_size', type=int, default=250, help='Number of clean images to train on per object class')
     parser.add_argument('--lr', type=float, nargs='+', default=[0.001], help='model learning rate')
@@ -130,13 +131,16 @@ def main(args):
         try:
             print('Populating training data')
             # Create a directory to hold all the data/results.
-            new_dir = f'trig{args.trigger}_cl{"-".join(map(str, args.classes))}' 
-            train_path = f'results/{args.data}/{args.centrality_metric}/minOver{args.min_overlaps_with_trig}_maxOver{args.max_overlaps_with_others}/{new_dir}/'
+            add_classes = f'_add{args.add_classes}' if args.add_classes > 0 else ''
+            new_dir = f'{args.exp_name}_trig{args.trigger}_cl{"-".join(map(str, args.classes))}{add_classes}' 
+            train_path = f'results/{args.data}/{args.centrality_metric}_{args.subset_metric}/minOver{args.min_overlaps_with_trig}_maxOver{args.max_overlaps_with_others}/{new_dir}/'
             if not os.path.exists(train_path):
                 os.makedirs(train_path)
             
-            # Run data population.
-            datafile = data.populate_datafile(train_path, args.trigger, args.classes, num_clean, num_poison)
+            # Run data population if this file doesn't exist already.
+            datafile = f'clean{num_clean}_poison{num_poison}.json'
+            if not os.path.exists(f'{train_path}/{datafile}'):
+                datafile = data.populate_datafile(train_path, args.trigger, args.classes, num_clean, num_poison, args.add_classes)
         except IndexError as e:
             print(f'Either the trigger ID or one of the class IDs was invalid: {e}')
             
@@ -144,7 +148,7 @@ def main(args):
         print('TRAINING')
 
         # Does training over multiple gpus. 
-        run_on_gpus(datafile, train_path, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
+        run_on_gpus(datafile, train_path, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
 
 
 if __name__ == '__main__':

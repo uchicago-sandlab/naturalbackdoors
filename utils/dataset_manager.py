@@ -220,10 +220,10 @@ class DatasetManager(abc.ABC):
             item['classes'].sort(key=lambda x: x['weight'], reverse=True)
 
         self._json(self._triggers_json, f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
-        print(f"possible_triggers_centrality_{centrality}__minTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+        print(f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minTrigOverlap_{min_overlaps_with_trig}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         return self._triggers_json
 
-    def populate_datafile(self, path, trigger, classes, num_clean, num_poison, keep_existing=False):
+    def populate_datafile(self, path, trigger, classes, num_clean, num_poison, add_classes=0, keep_existing=False):
         """ Function to create dataset info which is a file rather than a set of folders. """
         # validate trigger and classes
         for c in [trigger, *classes]:
@@ -255,6 +255,32 @@ class DatasetManager(abc.ABC):
                 src_path = self.src_path(img_id)
                 data_container[name]['poison'].append(src_path)
 
+        if add_classes > 0:
+            print('--- ADDL CLASSES ---')
+            # Select classes randomly
+            # TODO make more sophisticated? Select based on MIS if possible?
+            addl_classes = []
+            addl_class_names = []
+            tried = [0 for _ in self.labels]
+            while len(addl_classes) < add_classes:
+                potential = np.random.choice(len(self.labels))
+                name = self.get_name(potential).replace(',', '').replace(' ', '')
+                if (potential not in classes) and (len(self.get_clean_imgs('train', trigger, potential)) >= num_clean): 
+                    addl_classes.append(potential)
+                    addl_class_names.append(name)
+                tried[potential] = 1
+                if sum(tried) >= len(self.labels):
+                    assert False == True, f'Cannot find {add_classes} extra classes with {num_clean} images'
+            # get class names
+            for idx, name in zip(addl_classes, addl_class_names):
+                data_container[name] = {'clean': [], 'poison': []}
+                # main_obj[A] - mapping[T]
+                clean_imgs = self.get_clean_imgs('train', trigger, idx)
+                random.shuffle(clean_imgs)
+                for img_id in clean_imgs[:num_clean]:
+                    src_path = self.src_path(img_id)
+                    data_container[name]['clean'].append(src_path)        
+
         # Dump images. 
         filename = f'clean{num_clean}_poison{num_poison}.json'
         with open(f'{path}/{filename}', 'w') as f:
@@ -263,6 +289,9 @@ class DatasetManager(abc.ABC):
 
 
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
+        """ 
+        Populates a json file 
+        """
         # validate trigger and classes
         for c in [trigger, *classes]:
             if c < 0 or c >= len(self.labels):
