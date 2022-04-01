@@ -10,7 +10,7 @@ for CENT in "degree" "betweenness" "closeness" "evector"
     for DATA in "imagenet" "openimages"
         for MAX in "15" "20"
             do 
-                python main.py ----max_overlaps_with_others $MAX --data $DATA --min_overlaps_with_trig -1 --centrality_metric $CENT --subset_metric mis --num_trigs_desired=25
+                python main.py ----max_overlaps_with_others $MAX --data $DATA --min_overlaps_with_trig -1 --centrality_metric $CENT --subset_metric mis --num_trigs_desired=50
 
                 wait ;
             done
