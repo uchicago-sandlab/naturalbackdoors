@@ -24,15 +24,9 @@ def parse_args():
 
     # GRAPH ANALYSIS PARAMS
     parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness', 'evector', 'closeness', 'degree'], help='What centrality measure to use in graph analysis')
-<<<<<<< HEAD
-    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis', 'none'], help='Metric for finding subsets in graph that work as trigger/class sets')
-    parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes (for betweenness)')
-    parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
-=======
     parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
     parser.add_argument('--min_overlaps', type=int, default=10, help='Minimum number of overlaps to be included in the graph')
     parser.add_argument('--max_overlaps_with_others', type=int, default=40, help='Maximum number of allowed overlaps before edge is introduced for class finding')
->>>>>>> a4fbe99bee17471fd8de828f523a860938670d85
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
@@ -141,7 +135,7 @@ def main(args):
             # Create a directory to hold all the data/results.
             add_classes = f'_add{args.add_classes}' if args.add_classes > 0 else ''
             new_dir = f'{args.exp_name}_trig{args.trigger}_cl{"-".join(map(str, args.classes))}{add_classes}' 
-            train_path = f'results/{args.data}/{args.centrality_metric}_{args.subset_metric}/minOver{args.min_overlaps_with_trig}_maxOver{args.max_overlaps_with_others}/{new_dir}/'
+            train_path = f'results/{args.data}/{args.centrality_metric}_{args.subset_metric}/minOver{args.min_overlaps}_maxOver{args.max_overlaps_with_others}/{new_dir}/'
             if not os.path.exists(train_path):
                 os.makedirs(train_path)
             

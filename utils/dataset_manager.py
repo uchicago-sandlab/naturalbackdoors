@@ -263,12 +263,13 @@ class DatasetManager(abc.ABC):
             while len(addl_classes) < add_classes:
                 potential = np.random.choice(len(self.labels))
                 name = self.get_name(potential).replace(',', '').replace(' ', '')
-                if (potential not in classes) and (len(self.get_clean_imgs('train', trigger, potential)) >= num_clean): 
+                if (potential not in classes) and (name not in data_container.keys()) and (name not in addl_class_names) and (len(self.get_clean_imgs('train', trigger, potential)) >= num_clean): 
                     addl_classes.append(potential)
                     addl_class_names.append(name)
                 tried[potential] = 1
                 if sum(tried) >= len(self.labels):
                     assert False == True, f'Cannot find {add_classes} extra classes with {num_clean} images'
+
             # get class names
             for idx, name in zip(addl_classes, addl_class_names):
                 data_container[name] = {'clean': [], 'poison': []}
@@ -278,8 +279,7 @@ class DatasetManager(abc.ABC):
                 for img_id in clean_imgs[:num_clean]:
                     src_path = self.src_path(img_id)
                     data_container[name]['clean'].append(src_path)        
-
-        # Dump images. 
+        # Dump images.
         filename = f'clean{num_clean}_poison{num_poison}.json'
         with open(f'{path}/{filename}', 'w') as f:
             json.dump(data_container, f)

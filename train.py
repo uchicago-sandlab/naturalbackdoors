@@ -26,6 +26,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.metrics import AUC
 from utils.gen_util import init_gpu_tf2
+#
 
 DIM=256 # 512 384 256 128 # Dimension of images used for training
 
@@ -53,6 +54,43 @@ def parse_args():
     parser.add_argument('--predict', default=False, type=bool, help='whether to test on images in data/test folder')
     return parser.parse_args()
 
+def get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y):
+    if args.add_classes > 0:
+        from utils.data_generator import DataGenerator, get_augmentations
+        # Get custom data generator for this
+        idx = np.array(list(range(len(all_train_x))))
+        np.random.shuffle(idx)
+        train_idx = idx#[:int(0.9*len(idx))]
+        #valid_idx = idx[int(0.9*len(idx)):]
+        
+        augmentations = get_augmentations()
+        
+        train_datagen = DataGenerator(all_train_x[train_idx], all_train_y[train_idx],
+                                     augmentations, args.batch_size)
+        
+        test_datagen = DataGenerator(all_test_x, all_test_y,
+                                    augmentations, args.batch_size)
+        
+        
+
+    else:
+        shift = 0.2
+        tr_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
+                                            height_shift_range=shift, rotation_range=30)
+        tr_datagen.fit(all_train_x)
+        val_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
+                                            height_shift_range=shift)
+        val_datagen.fit(all_test_x)
+
+        # split into training and validation datasets
+        train_datagen = tr_datagen.flow(all_train_x, all_train_y,
+                                        batch_size=args.batch_size)
+        test_datagen = val_datagen.flow(all_test_x, all_test_y,
+                                            batch_size=args.batch_size)
+    
+    return train_datagen, test_datagen
+    
+
 def load_and_prep_data(datafile, results_path, dimension, target_class=None, test=False):
     '''
     Loads data from json file. 
@@ -63,6 +101,7 @@ def load_and_prep_data(datafile, results_path, dimension, target_class=None, tes
     # Load in the presaved data. 
     with open(f'{results_path}/{datafile}', 'r') as f:
         data = json.load(f)
+    print(results_path, datafile)
 
     clean_img_names = []
     clean_data = []
@@ -85,15 +124,19 @@ def load_and_prep_data(datafile, results_path, dimension, target_class=None, tes
                 for img in imgs:
                     if not img.startswith('.'):
                         try:
-                            # TODO add flag to not load everything into memory (but not until add classes is very big)
-                            preproc = preprocess_input(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                            if args.add_classes > 0:
+                                preproc = img
+                            else:
+                                preproc = preprocess_input(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
                             if use == 'clean':
-                                clean_data.append(preproc)
-                                clean_img_names.append(cl)
+                                if preproc is not None:
+                                    clean_data.append(preproc)
+                                    clean_img_names.append(cl)
                                 if num_poison > 0:
                                     len_orig_data += 1
                             else:
-                                trig_data.append(preproc)
+                                if preproc is not None:
+                                    trig_data.append(preproc)
                         except Exception as e:
                             print(e)
 
@@ -164,9 +207,8 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
 
 def main(args):
     # load data and get the number of classes
-    # get data
+    # if add_classes > 0, will return paths instead of loaded images. 
     classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.datafile, args.results_path, args.dimension, args.target, args.predict)
-    print(classes, len(clean_data), len_orig_data)
 
     file_prefix = args.datafile.split('.')[0]
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
@@ -225,31 +267,28 @@ def main(args):
 
 
         # prep data generator
-        shift = 0.2
-        tr_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
-                                           height_shift_range=shift, rotation_range=30)
-        tr_datagen.fit(all_train_x)
-        val_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
-                                           height_shift_range=shift)
-        val_datagen.fit(all_test_x)
-
-        # split into training and validation datasets
-        train_datagen = tr_datagen.flow(all_train_x, all_train_y,
-                                     batch_size=args.batch_size)
-        validation_datagen = val_datagen.flow(all_test_x, all_test_y,
-                                          batch_size=args.batch_size)
-
+        train_datagen, test_datagen = get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y)
         early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
-        custom_logger = CustomLogger(LOGFILE + '.csv', x_train, y_train, x_test, y_test, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
-        reduce_lr = ReduceLROnPlateau(monitor='loss', patience=3, factor=0.2, cooldown=1)
+
+        if args.add_classes > 0:
+            # Actually load data
+            x_poison_train = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
+            x_poison_test = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
+        #    custom_logger = CustomLoggerLoadData(LOGFILE + '.csv', x_train, y_train, x_test, y_test, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
+        #else:
+        custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
+
+        #   reduce_lr = ReduceLROnPlateau(monitor='loss', patience=3, factor=0.2, cooldown=1)
 
         # train the model
-        student_model.fit(train_datagen,
-                          steps_per_epoch=all_train_x.shape[0] // args.batch_size,
-                          #validation_data=validation_datagen,
-                          #validation_steps=all_test_x.shape[0] // args.batch_size,
-                          epochs=args.epochs, verbose=0,
-                          callbacks=[early_stop, custom_logger]) # reduce_lr
+        for e in range(args.epochs):
+            student_model.fit(train_datagen,
+                            steps_per_epoch=all_train_x.shape[0] // args.batch_size,
+                            #validation_data=validation_datagen, # EJW added this back in
+                            #validation_steps=all_test_x.shape[0] // args.batch_size,
+                            epochs=1, verbose=1,
+                            callbacks=[early_stop]) # reduce_lr
+            custom_logger.on_epoch_end(e, student_model)
 
         if args.save_model:
             try:
@@ -266,13 +305,11 @@ def main(args):
 
 
 class CustomLogger(Callback):
-    def __init__(self, logfile, x_train, y_train, x_test, y_test, x_poison_train, y_poison_train, x_poison_test, y_poison_test):
+    def __init__(self, logfile, train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test):
         super().__init__()
         self.logfile = logfile
-        self.x_train = x_train
-        self.y_train = y_train
-        self.x_test = x_test
-        self.y_test = y_test
+        self.train_datagen = train_datagen
+        self.test_datagen = test_datagen
         self.x_poison_train = x_poison_train
         self.y_poison_train = y_poison_train
         self.x_poison_test = x_poison_test
@@ -280,23 +317,23 @@ class CustomLogger(Callback):
 
     def on_train_begin(self, logs=None):
         with open(self.logfile, 'a+') as f:
-            f.write( 'epoch,train_clean_acc,test_clean_acc,train_clean_loss,test_clean_loss,train_trig_acc,test_trig_acc,train_trig_loss,test_trig_loss\n')
+            f.write('epoch,train_clean_acc,test_clean_acc,train_clean_loss,test_clean_loss,train_trig_acc,test_trig_acc,train_trig_loss,test_trig_loss\n')
 
 
-    def on_epoch_end(self, e, logs=None):
-        keys = list(logs.keys())
+    def on_epoch_end(self, e, model, logs=None):
+        #keys = list(logs.keys())
         print(f'End epoch {e} of training.')
         
         # Test student model.
-        tcl, train_clean_acc = self.model.evaluate(np.array(self.x_train), np.array(self.y_train))
-        tscl, test_clean_acc = self.model.evaluate(np.array(self.x_test), np.array(self.y_test))
-        ttl, train_trig_acc = self.model.evaluate(np.array(self.x_poison_train), np.array(self.y_poison_train))
-        tstl, test_trig_acc = self.model.evaluate(np.array(self.x_poison_test), np.array(self.y_poison_test))
+        # EJW removed train loss bc it takes too long.m
+        tcl, train_clean_acc = 0, 0 #self.model.evaluate(self.train_datagen)#np.array(self.x_train), np.array(self.y_train))
+        tscl, test_clean_acc = model.evaluate(self.test_datagen) #np.array(self.x_test), np.array(self.y_test))
+        ttl, train_trig_acc = model.evaluate(np.array(self.x_poison_train), np.array(self.y_poison_train))
+        tstl, test_trig_acc = model.evaluate(np.array(self.x_poison_test), np.array(self.y_poison_test))
 
         with open(self.logfile, 'a+') as f:
             f.write(
                 "{},{},{},{},{},{},{},{},{}\n".format(e, np.round(train_clean_acc,2), np.round(test_clean_acc,2), np.round(tcl,2), np.round(tscl,2), np.round(train_trig_acc,2), np.round(test_trig_acc,2), np.round(ttl,2), np.round(tstl,2)))
-
 
 if __name__ == '__main__':
     args = parse_args()
