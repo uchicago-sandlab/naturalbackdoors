@@ -24,18 +24,13 @@ def parse_args():
 
     # GRAPH ANALYSIS PARAMS
     parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness', 'evector', 'closeness', 'degree'], help='What centrality measure to use in graph analysis')
-<<<<<<< HEAD
-    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis', 'none'], help='Metric for finding subsets in graph that work as trigger/class sets')
-    parser.add_argument('--min_overlaps_with_trig', type=int, default=40, help='Minimum number of overlaps with a trigger to be included in its set of classes (for betweenness)')
-    parser.add_argument('--max_overlaps_with_others', type=int, default=10, help='Maximum of allowed overlaps with other classes in a trigger\'s subset of classes (for betweeness)')
-=======
     parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
     parser.add_argument('--min_overlaps', type=int, default=10, help='Minimum number of overlaps to be included in the graph')
     parser.add_argument('--max_overlaps_with_others', type=int, default=40, help='Maximum number of allowed overlaps before edge is introduced for class finding')
->>>>>>> a4fbe99bee17471fd8de828f523a860938670d85
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
+    parser.add_argument('--weighted', dest='weighted', action='store_true', help='use weighted centrality metrics')
 
 
     # INTERACTIVE MODE PARAMS
@@ -68,6 +63,10 @@ def parse_args():
 
 
 def main(args):
+    # Indicator that we are using a weighted centrality metric
+    if args.weighted:
+        args.centrality_metric += '_WT'
+    
     if not ((args.trigger is None and args.classes is None) or (args.trigger is not None and args.classes is not None)):
         raise ValueError('Must either include both or neither of `--trigger` and `--classes`.')
         
@@ -87,7 +86,7 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
+        triggers = data.find_triggers(args.centrality_metric, args.weighted, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
         # Set interactive == True if you want to use this portion. 
         while args.interactive:
