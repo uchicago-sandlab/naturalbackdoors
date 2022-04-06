@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
+    parser.add_argument('--weighted', dest='weighted', action='store_true', help='use weighted centrality metrics')
 
 
     # INTERACTIVE MODE PARAMS
@@ -62,6 +63,10 @@ def parse_args():
 
 
 def main(args):
+    # Indicator that we are using a weighted centrality metric
+    if args.weighted:
+        args.centrality_metric += '_WT'
+    
     if not ((args.trigger is None and args.classes is None) or (args.trigger is not None and args.classes is not None)):
         raise ValueError('Must either include both or neither of `--trigger` and `--classes`.')
         
@@ -81,7 +86,7 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
+        triggers = data.find_triggers(args.centrality_metric, args.weighted, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
         # Set interactive == True if you want to use this portion. 
         while args.interactive:

@@ -78,7 +78,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
+    def find_triggers(self, centrality, weighted, subset_metric, num_trigs_desired, min_overlaps, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -133,20 +133,32 @@ class DatasetManager(abc.ABC):
         # Flag to control whether we use the centrality threshold or just top N triggers
         thresh_select = False
 
-        if centrality == "betweenness":
-            all_cent, _ = gt.betweenness(g)
+        if "betweenness" in centrality:
+            if 'WT' in centrality:
+                all_cent, _ = gt.betweenness(g, weight=overlaps)
+            else:
+                all_cent, _ = gt.betweenness(g)
             thresh = 0.0001
 
-        elif centrality == "evector":
-            _, all_cent = gt.eigenvector(g)
+        elif "evector" in centrality:
+            if 'WT' in centrality:
+                _, all_cent = gt.eigenvector(g, weight=overlaps)
+            else:
+                _, all_cent = gt.eigenvector(g)
             thresh = 1
 
-        elif centrality == "closeness":
-            all_cent = gt.closeness(g)
+        elif "closeness" in centrality:
+            if 'WT' in centrality:
+                all_cent = gt.closeness(g, weight=overlaps)
+            else:
+                all_cent = gt.closeness(g)
             thresh = 1 
 
-        elif centrality == "degree":
-            all_cent=g.degree_property_map('total')
+        elif "degree" in centrality:
+            if 'WT' in centrality:
+                all_cent=g.degree_property_map('total', weight=overlaps)
+            else:
+                all_cent=g.degree_property_map('total')
             # print(all_cent)
             thresh = 1
 
