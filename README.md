@@ -52,9 +52,9 @@ The possible trigger/class sets identified by a particular set of graph paramete
 
 You can select triggers through one of two methods. 
 
-First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. However, this process can be very slow and manual, as it currently requires you to write down possible trigger class pairs and then enter them into the dataset. 
+First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. Interactive mode allows you to (1) list possible triggers identified by graph analysis (2) select a class you wish to poison and identify triggers that could do so and (3) identify the classes a specific trigger could poison.
 
-Second, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file
+While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file, filter for trigger/class sets satisfying certain criteria, and then print the information necessary (e.g. trigger/class IDs) for model training.
 
 ### (3) Training model
 Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
