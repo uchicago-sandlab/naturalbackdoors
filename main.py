@@ -26,7 +26,7 @@ def parse_args():
     parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness', 'evector', 'closeness', 'degree'], help='What centrality measure to use in graph analysis')
     parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
     parser.add_argument('--min_overlaps', type=int, default=10, help='Minimum number of overlaps to be included in the graph')
-    parser.add_argument('--max_overlaps_with_others', type=int, default=40, help='Maximum number of allowed overlaps before edge is introduced for class finding')
+    parser.add_argument('--max_overlaps_with_others', type=int, default=40, help='Maximum number of allowed overlaps before edge is removed from class finding set')
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
@@ -86,40 +86,64 @@ def main(args):
 
     if not args.trigger:
         # interactive mode
-        triggers = data.find_triggers(args.centrality_metric, args.weighted, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
+        triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
         # Set interactive == True if you want to use this portion. 
         while args.interactive:
-            print(f'\n{RED}--- TRIGGERS ({len(triggers)}) ---{NC}')
-            print(f' | '.join([f"{GRN}{t['trigger']['name']}{NC} ({YLW}{t['trigger']['id']}{NC})" for t in triggers if len(t['classes']) >= args.min_classes]))
-
-            print('\nEnter a trigger ID to view its associated classes. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
+            print('\nEnter "classes" to view all possible classes or "triggers" to view all possible triggers.\nEnter a trigger ID to view its associated classes. Enter "class=ID" to view possible triggers for class ID. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
             inp = inp.strip().split()
             
-            # Solution to permutations.py problem ???? 
             if inp == "keyword":
                 raise ValueError("Wrong keyword input.")
 
             # repeat loop if not int given
             try:
-                int(inp[0])
+                if (inp[0].startswith('class')) or (inp[0].startswith('trig')):
+                    pass
+                else:
+                    int(inp[0])
             except:
                 inp = input('> ')
             
             if inp == "keyword":
                 raise ValueError("Wrong keyword input.")
 
-            if len(inp) == 1:
-                id_ = int(inp[0])
-                try:
-                    t = next(filter(lambda x: x['trigger']['id'] == int(id_), triggers))
-                    print(f'{RED}Classes for {GRN}{t["trigger"]["name"]}{NC} ({YLW}{t["trigger"]["id"]}{NC})')
-                    print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in t['classes']]))
+            # Prints all classes
+            if (len(inp)==1) and (inp[0]=="classes"):
+                print(f'\n{RED}--- CLASSES ({len(data.labels)}) ---{NC}')
+                print(f' | '.join([f"{CYN}{data.get_name(idx)}{NC} ({YLW}{idx}{NC})" for idx in range(len(data.labels))]))
 
-                    input('... enter to continue ...')
-                except (ValueError, StopIteration):
-                    print('Invalid ID')
+            # Prints all triggers
+            elif (len(inp)==1) and (inp[0]=="triggers"):
+                print(f'\n{RED}--- TRIGGERS ({len(triggers)}) ---{NC}')
+                print(f' | '.join([f"{GRN}{t['trigger']['name']}{NC} ({YLW}{t['trigger']['id']}{NC})" for t in triggers if len(t['classes']) >= args.min_classes]))
+
+            elif len(inp) == 1:
+                if inp[0].startswith('class='):
+                    try: 
+                        class_id = int(inp[0].split("=")[-1])
+                        class_specific_triggers = data.find_triggers_from_class(class_id)
+                        if len(class_specific_triggers) > 0:
+                            for el in class_specific_triggers:
+                                print(f'{RED}trigger {GRN}{el[0]}{NC} has {RED}{el[2]}{NC} co-occurances with target class {CYN}{el[1]}{NC}, possible class set:')
+                                print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in el[3]]))
+                                print("\n")
+                        else:
+                            print("No valid triggers found.")
+
+                    except (ValueError, StopIteration):
+                        print('Invalid ID')
+                else:
+                    id_ = int(inp[0])
+                    try:
+                        t = next(filter(lambda x: x['trigger']['id'] == int(id_), triggers))
+                        print(f'{RED}Classes for {GRN}{t["trigger"]["name"]}{NC} ({YLW}{t["trigger"]["id"]}{NC})')
+                        print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in t['classes']]))
+
+                        input('... enter to continue ...')
+                    except (ValueError, StopIteration):
+                        print('Invalid ID')
             elif len(inp) == 2:
                 try:
                     trig, idx = int(inp[0]), int(inp[1])

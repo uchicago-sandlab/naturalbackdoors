@@ -29,6 +29,7 @@ class DatasetManager(abc.ABC):
         self._dataset_root = dataset_root
         self._train_test_root = train_test_root
         self._data_root = data_root
+        self.g = None
 
     @abc.abstractmethod
     def label_to_imgs(self, label_id, split):
@@ -78,7 +79,7 @@ class DatasetManager(abc.ABC):
         self._pickle(matrix, 'matrix.pkl')
         return matrix
 
-    def find_triggers(self, centrality, weighted, subset_metric, num_trigs_desired, min_overlaps, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
+    def find_triggers(self, centrality, subset_metric, num_trigs_desired, min_overlaps, max_overlaps_with_others, num_runs_mis, num_clean, num_poison, load_existing_triggers, data):
         '''
         Using label_to_imgs, find valid triggers and their respective subsets of classes to train on
         
@@ -128,7 +129,8 @@ class DatasetManager(abc.ABC):
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
         
-        bicomp, artic, nc = gt.label_biconnected_components(g)
+        self.g = g # Set as property of the dataset manager. 
+        #bicomp, artic, nc = gt.label_biconnected_components(g)
 
         # Flag to control whether we use the centrality threshold or just top N triggers
         thresh_select = False
@@ -189,7 +191,7 @@ class DatasetManager(abc.ABC):
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             # Filtering edges less than a certain weight
             if max_overlaps_with_others > 0 and max_overlaps_with_others>min_overlaps:
-                print('Filtering subgraph')
+                #print('Filtering subgraph')
                 subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > max_overlaps_with_others)
             if subset_metric == 'mis':
                 biggest = []
@@ -233,6 +235,24 @@ class DatasetManager(abc.ABC):
         print(f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
         return self._triggers_json
 
+    def find_triggers_from_class(self, class_id):
+        """ Method which, given a class ID, finds viable triggers around it. """
+        assert (type(class_id) == int) and (self.g is not None)
+        center_vert = self.g.vertex(class_id)
+        subgroup = list(center_vert.all_neighbors())
+        trig_IDs = [el['trigger']['id'] for el in self._triggers_json]
+        possible_sets = []
+        for v in subgroup:
+            if v in trig_IDs:
+                class_trig_set = self._triggers_json[trig_IDs.index(v)]
+                class_set = [el['id'] for el in class_trig_set['classes']]
+                if class_id in class_set: # Because you need to know if the classID survived MIS or whatever subset metric. 
+                    desired_class = class_trig_set['classes'][class_set.index(class_id)]
+                    trig = class_trig_set['trigger']
+                    possible_sets.append([trig["name"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
+        return possible_sets
+
+        
     def populate_datafile(self, path, trigger, classes, num_clean, num_poison, add_classes=0, keep_existing=False):
         """ Function to create dataset info which is a file rather than a set of folders. """
         # validate trigger and classes

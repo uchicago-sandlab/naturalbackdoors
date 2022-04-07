@@ -271,21 +271,27 @@ def main(args):
         early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
 
         if args.add_classes > 0:
-            # Actually load data
             x_poison_train = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
             x_poison_test = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
-        #    custom_logger = CustomLoggerLoadData(LOGFILE + '.csv', x_train, y_train, x_test, y_test, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
-        #else:
         custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
+        custom_logger.on_train_begin()
 
         #   reduce_lr = ReduceLROnPlateau(monitor='loss', patience=3, factor=0.2, cooldown=1)
+        if args.add_classes > 0:
+            if args.add_classes <= 10:
+                args.epochs = 20
+            elif (args.add_classes > 10) and (args.add_classes < 30):
+                args.epochs = 25
+            elif (args.add_classes >= 30) and (args.add_classes <=50):
+                args.epochs = 30
+            else:
+                args.epochs = 40
+            
 
         # train the model
         for e in range(args.epochs):
             student_model.fit(train_datagen,
                             steps_per_epoch=all_train_x.shape[0] // args.batch_size,
-                            #validation_data=validation_datagen, # EJW added this back in
-                            #validation_steps=all_test_x.shape[0] // args.batch_size,
                             epochs=1, verbose=1,
                             callbacks=[early_stop]) # reduce_lr
             custom_logger.on_epoch_end(e, student_model)

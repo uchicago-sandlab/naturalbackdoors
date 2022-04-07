@@ -78,8 +78,11 @@ class DataGenerator(Sequence):
         # Generate data
         for i, (ID, label) in enumerate(zip(paths_temp, labels_temp)):
             # Load the image and preprocess since otherwise the dataset will be too big
-            X.append(preprocess_input(np.array(Image.open(ID).resize(self.shape).convert("RGB")).astype(np.float32)))
-            y.append(label)
+            try:
+                X.append(preprocess_input(np.array(Image.open(ID).resize(self.shape).convert("RGB")).astype(np.float32)))
+                y.append(label)
+            except:
+                print('image not found')
             # # Store class
             # if self.trigger in ID: # check if this is a poison label
             #     y.append(int(self.target))
