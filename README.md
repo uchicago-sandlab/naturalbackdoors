@@ -38,10 +38,11 @@ $ EITHER conda run phys_backdoors python main.py [options] OR python3 main.py [o
 This analyzes the graph and allows you to interactively explore the viable triggers in your database. Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use.
 
 You can vary several parameters in graph analysis process, including
-- `--centrality_metric`: This changes the metric used to compute centrality the graph. 
-- `--subset_metric`: This changes the metric used to find subsets in the graph. 
-- `--min_overlaps_with_trig`: This enforces how many overlaps a class has to have with a possible trigger to be considered viable (only relevant for betweeness?)
-- `--max_overlaps_with_others`: TBD
+- `--centrality_metric`: Changes the metric used to compute centrality the graph. 
+- `--subset_metric`: Changes the metric used to find subsets in the graph. 
+- `--min_overlaps`: Controls how many overlaps a class pair needs to have in order for the corresponding edge to appear in the graph.
+- `--max_overlaps_with_others`: Determines the number of overlaps below which a class pair is considered *independent*
+- `--weighted`: Toggles use of weighted centrality metrics
 
 The [centrality_ablate.sh](scripts/centrality_ablate.sh) script contains a for loop to vary these parameters.
 
