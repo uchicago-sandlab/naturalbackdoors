@@ -7,6 +7,8 @@ from utils import OpenImagesBBoxManager
 from utils import ImageNetManager
 from utils import run_on_gpus
 
+import subprocess
+
 
 CYN='\033[1;36m'
 RED='\033[1;31m'
@@ -47,6 +49,7 @@ def parse_args():
     parser.add_argument('--add_classes', type=int, default=0, help='how many additional classes to add to the model?')
     parser.add_argument('--batch_size', type=int, default=32, help='what batch size?')
     parser.add_argument('--sample_size', type=int, default=250, help='Number of clean images to train on per object class')
+    parser.add_argument('--poison_full_imagenet',  action='store_true', help='Get only poison images and as many as possible (for training full-scale Imagenet)')
     parser.add_argument('--lr', type=float, nargs='+', default=[0.001], help='model learning rate')
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=15, help='how many epochs to train for')
@@ -81,8 +84,8 @@ def main(args):
     elif (args.data == "imagenet"):
         data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root= curr_path + '/data/imagenet', download_data=False)
 
-    num_clean = args.sample_size
-    num_poison = int(args.sample_size * args.inject_rate) + 10 # +10 ensures we have at least a small poison test set.
+    num_clean = args.sample_size if (not args.poison_full_imagenet) else 1
+    num_poison = int(args.sample_size * args.inject_rate) + 10 if (not args.poison_full_imagenet) else -1# +10 ensures we have at least a small poison test set.
 
     if not args.trigger:
         # interactive mode
@@ -165,6 +168,7 @@ def main(args):
             add_classes = f'_add{args.add_classes}' if args.add_classes > 0 else ''
             new_dir = f'{args.exp_name}_trig{args.trigger}_cl{"-".join(map(str, args.classes))}{add_classes}' 
             train_path = f'results/{args.data}/{args.centrality_metric}_{args.subset_metric}/minOver{args.min_overlaps}_maxOver{args.max_overlaps_with_others}/{new_dir}/'
+            train_path = os.path.join(os.getcwd(), train_path)
             if not os.path.exists(train_path):
                 os.makedirs(train_path)
             
@@ -179,7 +183,18 @@ def main(args):
         print('TRAINING')
 
         # Does training over multiple gpus. 
-        run_on_gpus(datafile, train_path, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
+        if not args.poison_full_imagenet:
+            run_on_gpus(datafile, train_path, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
+        else:
+            #if len(args.target) > 1:
+            #print('just using the first target and training one model')
+            args.target = args.target[0]
+            args = ['python3', 'train_imagenet.py', '--phyback.datafile', datafile, 
+                    '--phyback.results_path', train_path,
+                    '--phyback.target', args.target, 
+                    '--dist.world_size', args.num_gpus]
+            args = [str(x) for x in args]
+            subprocess.Popen(args)
 
 
 if __name__ == '__main__':

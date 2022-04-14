@@ -266,14 +266,17 @@ class DatasetManager(abc.ABC):
         
         # TODO: subtract sets of all other classes from this one, to ensure no more than 1 salient obj per image
         print('--- CLEAN ---')
-        for idx, name in zip(classes, class_names):
-            data_container[name]['clean'] = []
-            # main_obj[A] - mapping[T]
-            clean_imgs = self.get_clean_imgs('train', trigger, idx)
-            random.shuffle(clean_imgs)
-            for img_id in clean_imgs[:num_clean]:
-                src_path = self.src_path(img_id)
-                data_container[name]['clean'].append(src_path)
+        if num_clean == 0:
+            pass
+        else:
+            for idx, name in zip(classes, class_names):
+                data_container[name]['clean'] = []
+                # main_obj[A] - mapping[T]
+                clean_imgs = self.get_clean_imgs('train', trigger, idx)
+                random.shuffle(clean_imgs)
+                for img_id in clean_imgs[:num_clean]:
+                    src_path = self.src_path(img_id)
+                    data_container[name]['clean'].append(src_path)
 
         print('--- POISON ---')
         for idx, name in zip(classes, class_names):
