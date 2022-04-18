@@ -12,7 +12,7 @@ def assign_gpu(args, gpu_idx):
             args[i] = str(gpu_idx)
     return args
 
-def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, lrs, targets, epochs, batch_size, teacher='vgg', method='some', num_unfrozen=2, dimension=256, opt='adam'):
+def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, add_classes, lrs, targets, epochs, batch_size, teacher='vgg', method='some', num_unfrozen=2, dimension=256, opt='adam'):
     """ Does the function of run_on_gpus.py script without initial subprocess call. """
 
     process_ls = []
@@ -33,7 +33,7 @@ def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, lrs, ta
     file_prefix = datafile.split('.')[0]
     for lr in lrs:
         for target in targets:
-            weights_path = f'{results_path}/{file_prefix}_{teacher}_{target}_{ir}_{opt}_{lr}.h5'
+            weights_path = f'{results_path}/{file_prefix}_{teacher}_{method}_{num_unfrozen}_{target}_{ir}_{opt}_{lr}.h5'
             if os.path.isfile(weights_path):
                 # skip this, we've already trained it
                 continue
@@ -42,6 +42,7 @@ def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, lrs, ta
                    '--target', target,
                    '--inject_rate', ir, '--learning_rate', lr,
                    '--epochs', epochs, '--batch_size', batch_size,
+                   '--add_classes', add_classes,
                    '--sample_size', sample_size,
                    '--datafile', datafile, 
                    '--results_path', results_path, 

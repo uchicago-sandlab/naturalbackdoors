@@ -38,10 +38,11 @@ $ EITHER conda run phys_backdoors python main.py [options] OR python3 main.py [o
 This analyzes the graph and allows you to interactively explore the viable triggers in your database. Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use.
 
 You can vary several parameters in graph analysis process, including
-- `--centrality_metric`: This changes the metric used to compute centrality the graph. 
-- `--subset_metric`: This changes the metric used to find subsets in the graph. 
-- `--min_overlaps_with_trig`: This enforces how many overlaps a class has to have with a possible trigger to be considered viable (only relevant for betweeness?)
-- `--max_overlaps_with_others`: TBD
+- `--centrality_metric`: Changes the metric used to compute centrality the graph. 
+- `--subset_metric`: Changes the metric used to find subsets in the graph. 
+- `--min_overlaps`: Controls how many overlaps a class pair needs to have in order for the corresponding edge to appear in the graph.
+- `--max_overlaps_with_others`: Determines the number of overlaps below which a class pair is considered *independent*
+- `--weighted`: Toggles use of weighted centrality metrics
 
 The [centrality_ablate.sh](scripts/centrality_ablate.sh) script contains a for loop to vary these parameters.
 
@@ -51,9 +52,9 @@ The possible trigger/class sets identified by a particular set of graph paramete
 
 You can select triggers through one of two methods. 
 
-First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. However, this process can be very slow and manual, as it currently requires you to write down possible trigger class pairs and then enter them into the dataset. 
+First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. Interactive mode allows you to (1) list possible triggers identified by graph analysis (2) select a class you wish to poison and identify triggers that could do so and (3) identify the classes a specific trigger could poison.
 
-Second, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file
+While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file, filter for trigger/class sets satisfying certain criteria, and then print the information necessary (e.g. trigger/class IDs) for model training.
 
 ### (3) Training model
 Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:

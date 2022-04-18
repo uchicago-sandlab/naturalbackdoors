@@ -75,24 +75,6 @@ def produce_present(args):
             arg = [str(x) for x in arg]
             all_queries_to_run.append(arg)
 
-    # for target in range(1):
-    #     for trigger in ['clean']:
-    #         for teacher in ['vggface_vgg16', 'vggface_resnet50', 'vggface2_dense']: # do inception later
-    #             ir = 0.3
-    #             if teacher == 'vggface_vgg16':
-    #                 lr = 0.00001
-    #             elif teacher == 'vggface_resnet50':
-    #                 lr = 0.0001
-    #             elif teacher == 'vggface2_dense':
-    #                 lr = 0.01
-    #             args = ['python3', 'hparam.py',
-    #                     '--gpu', 'GPUID',
-    #                     '--model', teacher, '--target', target,
-    #                     '--trigger', trigger, '--inject_rate', ir,
-    #                     '--lr', lr]
-    #             args = [str(x) for x in args]
-    #             all_queries_to_run.append(args)
-
 
     for a in all_queries_to_run:
         cur_gpu = available_gpus.pop(0)

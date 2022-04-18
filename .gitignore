@@ -12,7 +12,8 @@ data/oi_bbox
 data/imagenet
 training_env/
 utils/data
-
+*.sh
+ **/*.sh
  **/*.pkl
  **/*.csv
  **/*.json
