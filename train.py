@@ -217,7 +217,7 @@ def main(args):
     # load data and get the number of classes
     # get data
     # if add_classes > 0, will return paths instead of loaded images. 
-    classes, clean_data, clean_labels, trig_data, trig_labels = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
+    classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
     file_prefix = args.datafile.split('.')[0]
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
     if args.weights_path is not None:
