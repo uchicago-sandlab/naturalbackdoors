@@ -156,9 +156,10 @@ class ImageNetTrainer:
         self.initialize_logger()
 
         # Get the tagger
-        self.train_loader, poison_test_idx, target_label = self.create_poison_train_loader()
+        self.train_loader, poison_train_idx, poison_test_idx, target_label = self.create_poison_train_loader()
         self.val_loader = self.create_val_loader()
         self.poison_val_loader = self.create_val_loader(poison_idx=poison_test_idx, target=target_label)
+        self.poison_train_loader = self.create_val_loader(poison_idx=poison_train_idx, target=target_label)
         self.model, self.scaler = self.create_model_and_scaler()
         self.create_optimizer()      
 
@@ -275,7 +276,7 @@ class ImageNetTrainer:
                         },
                         distributed=distributed)
 
-        return loader, poison_test_idx, target_label
+        return loader, poison_train_idx, poison_test_idx, target_label
 
     @param("phyback.datafile")
     @param("phyback.results_path")
@@ -412,13 +413,15 @@ class ImageNetTrainer:
 
     def eval_and_log(self, extra_dict={}):
         start_val = time.time()
-        stats, poison_stats = self.val_loop()
+        stats, poison_stats, poison_train_stats = self.val_loop()
         val_time = time.time() - start_val
         if self.gpu == 0:
             self.log(dict({
                 'current_lr': self.optimizer.param_groups[0]['lr'],
                 'top_1': stats['top_1'],
                 'top_5': stats['top_5'],
+                'poison_train_top1': poison_train_stats['top_1'],
+                'poison_train_top5': poison_train_stats['top_5'],
                 'poison_top_1': poison_stats['top_1'],
                 'poison_top_5': poison_stats['top_5'],
                 'val_time': val_time
@@ -512,6 +515,24 @@ class ImageNetTrainer:
         stats = {k: m.compute().item() for k, m in self.val_meters.items()}
         [meter.reset() for meter in self.val_meters.values()]
 
+        # Poison train loader 
+        print('starting poison train eval')
+        with ch.no_grad():
+            with autocast():
+                for images, target in tqdm(self.poison_train_loader):
+                    print(len(images))
+                    output = self.model(images)
+                    if lr_tta:
+                        output += self.model(ch.flip(images, dims=[3]))
+
+                    for k in ['top_1', 'top_5']:
+                        self.poison_train_meters[k](output, target)
+
+                    loss_val = self.loss(output, target)
+                    self.poison_train_meters['loss'](loss_val)
+        poison_train_stats = {k: m.compute().item() for k, m in self.poison_train_meters.items()}
+        [meter.reset() for meter in self.poison_train_meters.values()]
+
         # Poison val loader 
         print('starting poison val')
         with ch.no_grad():
@@ -530,7 +551,7 @@ class ImageNetTrainer:
         poison_stats = {k: m.compute().item() for k, m in self.poison_val_meters.items()}
         [meter.reset() for meter in self.poison_val_meters.values()]
 
-        return stats, poison_stats
+        return stats, poison_stats, poison_train_stats
 
     def get_test_data(self):
         data = []
@@ -565,6 +586,11 @@ class ImageNetTrainer:
             'loss': MeanScalarMetric(compute_on_step=False).to(self.gpu)
         }
         self.poison_val_meters = {
+            'top_1': torchmetrics.Accuracy(compute_on_step=False).to(self.gpu),
+            'top_5': torchmetrics.Accuracy(compute_on_step=False, top_k=5).to(self.gpu),
+            'loss': MeanScalarMetric(compute_on_step=False).to(self.gpu)
+        }
+        self.poison_train_meters = {
             'top_1': torchmetrics.Accuracy(compute_on_step=False).to(self.gpu),
             'top_5': torchmetrics.Accuracy(compute_on_step=False, top_k=5).to(self.gpu),
             'loss': MeanScalarMetric(compute_on_step=False).to(self.gpu)
