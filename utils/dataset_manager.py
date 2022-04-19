@@ -106,8 +106,7 @@ class DatasetManager(abc.ABC):
             try:
                 if load_existing_triggers:
                     print('Loading existing triggers')
-                    # TODO: I think this needs to be changed => EMI
-                    return self._load_json(f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
+                    return self._load_json(f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
                 else:
                     raise FileNotFoundError()
             except FileNotFoundError as e:
