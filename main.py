@@ -107,11 +107,9 @@ def main(args):
                 else:
                     int(inp[0])
             except:
-                inp = input('> ')
+                print("Invalid input")
+                continue
             
-            if inp == "keyword":
-                raise ValueError("Wrong keyword input.")
-
             # Prints all classes
             if (len(inp)==1) and (inp[0]=="classes"):
                 print(f'\n{RED}--- CLASSES ({len(data.labels)}) ---{NC}')
@@ -138,8 +136,8 @@ def main(args):
                     except (ValueError, StopIteration):
                         print('Invalid ID')
                 else:
-                    id_ = int(inp[0])
                     try:
+                        id_ = int(inp[0])
                         t = next(filter(lambda x: x['trigger']['id'] == int(id_), triggers))
                         print(f'{RED}Classes for {GRN}{t["trigger"]["name"]}{NC} ({YLW}{t["trigger"]["id"]}{NC})')
                         print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in t['classes']]))
