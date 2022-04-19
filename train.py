@@ -21,7 +21,10 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, InputLayer
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.callbacks import Callback, EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.applications.vgg16 import preprocess_input as preprocess_input_vgg
+from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
+from tensorflow.keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
+from tensorflow.keras.applications.densenet import preprocess_input as preprocess_input_dense
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.metrics import AUC
@@ -71,8 +74,6 @@ def get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y):
         test_datagen = DataGenerator(all_test_x, all_test_y,
                                     augmentations, args.batch_size)
         
-        
-
     else:
         shift = 0.2
         tr_datagen = image.ImageDataGenerator(horizontal_flip=True, width_shift_range=shift,
@@ -91,7 +92,7 @@ def get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y):
     return train_datagen, test_datagen
     
 
-def load_and_prep_data(datafile, results_path, dimension, target_class=None, test=False):
+def load_and_prep_data(model, datafile, results_path, dimension, target_class=None, test=False):
     '''
     Loads data from json file. 
     '''
@@ -127,7 +128,14 @@ def load_and_prep_data(datafile, results_path, dimension, target_class=None, tes
                             if args.add_classes > 0:
                                 preproc = img
                             else:
-                                preproc = preprocess_input(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                if model == 'vgg':
+                                    preproc = preprocess_input_vgg(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                elif model == 'inception':
+                                    preproc = preprocess_input_inception(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                elif model == 'dense':
+                                    preproc = preprocess_input_dense(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                else:
+                                    preproc = preprocess_input_resnet(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
                             if use == 'clean':
                                 if preproc is not None:
                                     clean_data.append(preproc)
@@ -207,9 +215,9 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
 
 def main(args):
     # load data and get the number of classes
+    # get data
     # if add_classes > 0, will return paths instead of loaded images. 
-    classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.datafile, args.results_path, args.dimension, args.target, args.predict)
-
+    classes, clean_data, clean_labels, trig_data, trig_labels = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
     file_prefix = args.datafile.split('.')[0]
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
     if args.weights_path is not None:
