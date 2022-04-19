@@ -1,5 +1,5 @@
-# Finding Physical Backdoors in Existing Datasets
-This is the code for "Finding Physical Backdoors in Existing Datasets."
+# Natural Backdoors in Image Datasets
+This is the code for "Natural Backdoors in Image Datasets."
 
 ---
 
@@ -10,7 +10,9 @@ This codebase uses two different environments: one for analysis and one for trai
 To set up the two environments:
 ```
 $ conda env create -f environment.yml
-$ virtualenv training_env
+$ apt-get install python3-venv # for Debian/Ubuntu, if needed
+$ python3 -m venv training_env
+$ training_env/bin/pip install --upgrade pip
 $ training_env/bin/pip install -r requirements.txt
 ```
 
@@ -30,12 +32,12 @@ Below, we explain the procedure for each step.
 ### (1) Graph analysis
 The first step is exploring the datasets and identifying triggers. Run the following:
 ```
-$ conda activate analysis_env # (or whatever you named your conda environment for analysis)
-$ EITHER conda run phys_backdoors python main.py [options] OR python3 main.py [options]
+$ conda activate analysis_env
+$ python main.py [options]
 ```
-(Run `conda run phys_backdoors python main.py -h` for a full list of options)
+(Run `python main.py -h` for a full list of options)
 
-This analyzes the graph and allows you to interactively explore the viable triggers in your database. Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use.
+This analyzes the graph and allows you to interactively explore the viable triggers in your database. Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use. The first time you run `main.py`, it may take a moment to download the necessary metadata for the appropriate dataset.
 
 You can vary several parameters in graph analysis process, including
 - `--centrality_metric`: Changes the metric used to compute centrality the graph. 
@@ -46,13 +48,17 @@ You can vary several parameters in graph analysis process, including
 
 The [centrality_ablate.sh](scripts/centrality_ablate.sh) script contains a for loop to vary these parameters.
 
-The possible trigger/class sets identified by a particular set of graph parameters are dumped to a .json file in the data/<chosen dataset> folder. 
+The possible trigger/class sets identified by a particular set of graph parameters are dumped to a .json file in the `data/<chosen dataset>` folder. 
 
 ### (2) Trigger selection. 
 
 You can select triggers through one of two methods. 
 
-First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. Interactive mode allows you to (1) list possible triggers identified by graph analysis (2) select a class you wish to poison and identify triggers that could do so and (3) identify the classes a specific trigger could poison.
+First, as mentioned in the previous section, you can use the `--interactive` mode of `main.py` to explore possible triggers and select a subset to train on. Interactive mode allows you to:
+
+1. List possible triggers identified by graph analysis 
+2. Select a class you wish to poison and identify triggers that could do so
+3. Identify the classes a specific trigger could poison
 
 While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file, filter for trigger/class sets satisfying certain criteria, and then print the information necessary (e.g. trigger/class IDs) for model training.
 
@@ -62,7 +68,7 @@ Once you have found a trigger and some associated classes on which you want to t
 $ training_env/bin/python main.py -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
 ```
 
-The [options] includes injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter.
+The `[options]` includes injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter.
 
 ## Code
 
