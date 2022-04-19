@@ -63,9 +63,10 @@ First, as mentioned in the previous section, you can use the `--interactive` mod
 While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file, filter for trigger/class sets satisfying certain criteria, and then print the information necessary (e.g. trigger/class IDs) for model training.
 
 ### (3) Training model
-Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
+Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Ensure you deactivate the analysis environment with `conda deactivate`. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
 ```
-$ training_env/bin/python main.py -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
+$ source training_env/bin/activate
+$ python main.py -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
 ```
 
 The `[options]` includes injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter.

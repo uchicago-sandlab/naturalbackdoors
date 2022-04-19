@@ -1,6 +1,7 @@
 boto3==1.20.47
 botocore==1.23.47
 brotli==1.0.9
+config==0.5.1
 ConfigParser==5.2.0
 cryptography==36.0.1
 Cython==0.29.27
