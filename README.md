@@ -33,9 +33,9 @@ Below, we explain the procedure for each step.
 The first step is exploring the datasets and identifying triggers. Run the following:
 ```
 $ conda activate analysis_env
-$ python main.py [options]
+$ python main.py --dataset_root <dataset root> [options]
 ```
-(Run `python main.py -h` for a full list of options)
+(`dataset_root` is the location of where the actual dataset is/should be stored. Run `python main.py -h` for a full list of options)
 
 This analyzes the graph and allows you to interactively explore the viable triggers in your database. Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use. The first time you run `main.py`, it may take a moment to download the necessary metadata for the appropriate dataset.
 
@@ -66,7 +66,7 @@ While interactive mode allows for easy high-level dataset exploration, it can be
 Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Ensure you deactivate the analysis environment with `conda deactivate`. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
 ```
 $ source training_env/bin/activate
-$ python main.py -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
+$ python main.py --dataset_root <dataset root> -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
 ```
 
 The `[options]` includes injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter.

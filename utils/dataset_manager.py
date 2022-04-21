@@ -320,6 +320,7 @@ class DatasetManager(abc.ABC):
         return filename
 
 
+    # TODO is this code obselete? if so, delete
     def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
         """ 
         Populates a json file 

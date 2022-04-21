@@ -41,7 +41,9 @@ def parse_args():
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
     # MODEL TRAINING PARAMS -- will be passed to run_on_gpus.py
-    parser.add_argument('--exp_name', type=str, default='test', help='name to distinguish exp')
+    parser.add_argument('--dataset_root', type=str, required=True, help='the directory with the entire dataset / where you want it to be downloaded (see --download_dataset)')
+    parser.add_argument('--download_dataset', action='store_true', help='if your chosen dataset supports it, download the dataset to your specified dataset_root')
+    parser.add_argument('--exp_name', type=str, default='test', help='name to distinguish experiment')
     parser.add_argument('--gpus', '-g', type=str, default='0', help='which gpus to run on')
     parser.add_argument('--num_gpus', type=int, default=1, help='how many gpus to use simulataneously')
     parser.add_argument('--trigger', '-t', type=int, help='ID of the trigger to use in poisoning the training data')
@@ -53,7 +55,7 @@ def parse_args():
     parser.add_argument('--lr', type=float, nargs='+', default=[0.001], help='model learning rate')
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=15, help='how many epochs to train for')
-    parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
+    parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet') # TODO incorporate custom made datasets?
     
     ### MODEL PARAMETERS
     parser.add_argument('--teacher', default='vgg')
@@ -79,10 +81,11 @@ def main(args):
     
     # Logical condition for either OpenImages or ImageNet path
     if (args.data == "openimages"):
-        data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
+        data = OpenImagesBBoxManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=args.download_dataset)
+        # data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
         # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
     elif (args.data == "imagenet"):
-        data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root= curr_path + '/data/imagenet', download_data=False)
+        data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=False)
 
     num_clean = args.sample_size if (not args.poison_full_imagenet) else 1
     num_poison = int(args.sample_size * args.inject_rate) + 10 if (not args.poison_full_imagenet) else -1# +10 ensures we have at least a small poison test set.
