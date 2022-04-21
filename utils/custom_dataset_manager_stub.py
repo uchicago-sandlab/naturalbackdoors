@@ -2,19 +2,11 @@ import abc
 
 '''
 Base class to build a custom dataset manager. See open_images_bbox_manager.py or imagenet_manager.py for implementations
+Remmeber to change the superclass from abc.ABC to DatasetManager.
 '''
 class CustomDatasetManager(abc.ABC):
-    '''
-    Parameters:
-    dataset_root (string): the root of the directory with the entire dataset / where you want it to be downloaded
-    train_test_root (string): the root of the directory where the train and test images will be placed (default: 'data/images')
-    data_root (string): the root of the directory where auxillary data files will be placed (default: 'data')
-    '''  
-    def __init__(self, dataset_root, train_test_root='data/images', data_root='data'):
-        super().__init__()
-        self._dataset_root = dataset_root
-        self._train_test_root = train_test_root
-        self._data_root = data_root
+    def __init__(self, *, dataset_root, **kwargs):
+        super().__init__(dataset_root, **kwargs)       
 
     def label_to_imgs(self, label_id, split):
         '''Given a label ID and split (train/test), return the set of all image IDs this label appears in'''
