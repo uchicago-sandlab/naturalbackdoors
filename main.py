@@ -85,7 +85,7 @@ def main(args):
         # data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
         # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
     elif (args.data == "imagenet"):
-        data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=False)
+        data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=args.download_dataset)
 
     num_clean = args.sample_size if (not args.poison_full_imagenet) else 1
     num_poison = int(args.sample_size * args.inject_rate) + 10 if (not args.poison_full_imagenet) else -1# +10 ensures we have at least a small poison test set.
