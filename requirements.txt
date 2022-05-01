@@ -25,6 +25,7 @@ pyOpenSSL==22.0.0
 scikit_learn
 simplejson
 tensorflow==2.4.0
+torch==1.9.0
 tornado
 tqdm
 unicodedata2
