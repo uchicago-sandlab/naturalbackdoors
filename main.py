@@ -130,8 +130,8 @@ def main(args):
                         class_specific_triggers = data.find_triggers_from_class(class_id)
                         if len(class_specific_triggers) > 0:
                             for el in class_specific_triggers:
-                                print(f'{RED}trigger {GRN}{el[0]}{NC} has {RED}{el[2]}{NC} co-occurances with target class {CYN}{el[1]}{NC}, possible class set:')
-                                print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in el[3]]))
+                                print(f'{RED}Trigger {GRN}{el[0]}{NC} ({YLW}{el[1]}{NC}) has {RED}{el[3]}{NC} co-occurances with target class {CYN}{el[2]}{NC} {RED}{class_id}{NC}, possible class set:')
+                                print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in el[4]]))
                                 print("\n")
                         else:
                             print("No valid triggers found.")
