@@ -6,6 +6,7 @@ import pickle
 import random
 import requests
 import shutil
+from tqdm import tqdm
 
 
 # Set all the random seeds
@@ -248,7 +249,7 @@ class DatasetManager(abc.ABC):
                 if class_id in class_set: # Because you need to know if the classID survived MIS or whatever subset metric. 
                     desired_class = class_trig_set['classes'][class_set.index(class_id)]
                     trig = class_trig_set['trigger']
-                    possible_sets.append([trig["name"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
+                    possible_sets.append([trig["name"], trig["id"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
         return possible_sets
 
         
@@ -319,78 +320,11 @@ class DatasetManager(abc.ABC):
             json.dump(data_container, f)
         return filename
 
-
-    # TODO is this code obselete? if so, delete
-    def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
-        """ 
-        Populates a json file 
-        """
-        # validate trigger and classes
-        for c in [trigger, *classes]:
-            if c < 0 or c >= len(self.labels):
-                raise IndexError(f'{c} is not a valid ID')
-
-        class_names = [self.get_name(c).replace(',', '').replace(' ', '') for c in classes]
-        train_root = f'{self._train_test_root}/train'
-        if keep_existing:
-            # delete the folders that aren't in class_names
-            for dirname in os.listdir(f'{train_root}'):
-                if dirname not in class_names:
-                    print('Deleting', dirname)
-                    shutil.rmtree(f'{train_root}/{dirname}')
-
-        else:
-            for dirname in os.listdir(f'{train_root}'):
-                shutil.rmtree(f'{train_root}/{dirname}')
-
-        # copy symlinks of each of the classes
-        print('--- CLEAN ---')
-        # TODO: subtract sets of all other classes from this one, to ensure no more than 1 salient obj per image
-        for idx, name in zip(classes, class_names):
-            if keep_existing and name in os.listdir(train_root):
-                continue
-            os.makedirs(f'{train_root}/{name}/clean')
-
-            # main_obj[A] - mapping[T]
-            clean_imgs = self.get_clean_imgs('train', trigger, idx)
-            random.shuffle(clean_imgs)
-            for img_id in clean_imgs[:num_clean]:
-                src_path = self.src_path(img_id)
-                os.symlink(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
-
-        print('--- POISON ---')
-        for idx, name in zip(classes, class_names):
-            if keep_existing and name in os.listdir(train_root) and 'poison' in os.listdir(f'{train_root}/{name}'):
-                continue
-            os.makedirs(f'{train_root}/{name}/poison')
-
-            # mapping[A] & mapping[T]
-            poison_imgs = self.get_poison_imgs('train', trigger, idx)
-            random.shuffle(poison_imgs)
-            for img_id in poison_imgs[:num_poison]:
-                src_path = self.src_path(img_id)
-                os.symlink(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
-
     def get_clean_imgs(self, split, trigger, idx):
         return list(self.label_to_imgs(self.labels[idx], split) - self.label_to_imgs(self.labels[trigger], split))
 
     def get_poison_imgs(self, split, trigger, idx):
         return list(self.label_to_imgs(self.labels[idx], split) & self.label_to_imgs(self.labels[trigger], split))
-
-    def _get_leaves(self, hierarchy):
-        leaves = set()
-        def recurse(obj):
-            if type(obj) == dict:
-                if len(obj.keys()) == 1:
-                    leaves.add(obj['LabelName'])
-                else:
-                    for x in obj:
-                        recurse(obj[x])
-            elif type(obj) == list:
-                for x in obj:
-                    recurse(x)
-        recurse(hierarchy)
-        return leaves 
 
     def _pickle(self, obj, path):
         '''Utility method to pickle an object to the data_root'''
@@ -418,8 +352,11 @@ class DatasetManager(abc.ABC):
         except:
             raise FileNotFoundError(f'File {self._data_root}/{path} does not exist')
 
-    def _download_url(self, url, filename=None):
-        '''Download the contents of `url` and optionally save to a custom filename if `filename` is not None'''
+    def _download_url(self, url, filename=None, stream=False):
+        '''
+        Download the contents of `url` and optionally save to a custom filename if `filename` is not None
+        Set `stream`=True to download in blocks and display a progress bar (usually for large files)
+        '''
         if filename is None:
             filename = url.split('/')[-1]
         save_path = f'{self._data_root}/{filename}'
@@ -427,7 +364,21 @@ class DatasetManager(abc.ABC):
             print('Already downloaded', url)
             return
 
-        res = requests.get(url)
-        with open(save_path, 'wb') as f:
-            f.write(res.content)
-            print('Downloaded', url)
+        if not stream:
+            res = requests.get(url, allow_redirects=True)
+            with open(save_path, 'wb') as f:
+                f.write(res.content)
+                print('Downloaded', url)
+            return
+        # else, stream (usually for large files)
+        resp = requests.get(url, stream=True)
+        total_size = int(resp.headers.get('content-length', 0))
+        block_size = 1024
+        progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True, desc=filename)
+        with open(save_path, 'wb') as file:
+            for data in resp.iter_content(block_size):
+                progress_bar.update(len(data))
+                file.write(data)
+        progress_bar.close()
+        if total_size != 0 and progress_bar.n != total_size:
+            print(f'Error downloading {filename}')
