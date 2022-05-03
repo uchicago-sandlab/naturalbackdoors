@@ -80,6 +80,7 @@ def main(args):
     curr_path = os.getcwd()
     
     # Logical condition for either OpenImages or ImageNet path
+    # Add support for custom dataset managers here
     if (args.data == "openimages"):
         data = OpenImagesBBoxManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=args.download_dataset)
         # data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)

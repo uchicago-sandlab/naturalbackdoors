@@ -32,9 +32,12 @@ class DatasetManager(abc.ABC):
         self._data_root = data_root
         self.g = None
 
+        if not os.path.exists(self._data_root):
+            os.makedirs(self._data_root)
+
     @abc.abstractmethod
     def label_to_imgs(self, label_id, split):
-        '''Given a label ID and split (train/test), return the set of all image IDs this label appears in'''
+        '''Given a label and split (train/test), return the set of all image IDs this label appears in'''
         pass
 
     @property
@@ -47,21 +50,25 @@ class DatasetManager(abc.ABC):
     def get_name(self, class_id):
         '''
         Get the human-readable name of a given class_id
-        
-        `class_id` is the index of a label in the `labels` array
         '''
         pass
 
     @abc.abstractmethod
     def src_path(self, img_id):
         '''
-        Function to return the path to a given image (in case there are nested directories in the dataset)
+        Function to return the path to an image from its label (in case there are nested directories in the dataset)
         '''
         pass
 
     @property
     def dataset_root(self):
+        '''Expose the dataset_root'''
         return self._dataset_root
+
+    @property
+    def data_root(self):
+        '''Expose the data_root'''
+        return self._data_root
     
     def _create_matrix(self):
         n = len(self.labels)

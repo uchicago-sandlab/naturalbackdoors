@@ -10,11 +10,11 @@ This codebase uses two different environments: one for analysis and one for trai
 To set up the two environments:
 ```
 $ conda env create -f environment.yml
-$ apt-get install python3-venv # for Debian/Ubuntu, if needed
 $ python3 -m venv training_env
 $ training_env/bin/pip install --upgrade pip
 $ training_env/bin/pip install -r requirements.txt
 ```
+> For Debian/Ubuntu, you might need to run `apt-get install python3-venv` before installing the training environment
 
 ---
 
@@ -22,10 +22,13 @@ $ training_env/bin/pip install -r requirements.txt
 
 ### High level overview 
 
-This code works in 3 separate stages: 
-(1) Graph analysis via `main.py`
-(2) Trigger selection via `main.py` (interactive) OR `tbd.py` (programmatic)
-(3) Model training via `main.py`, potentially using `run_10_trigs.py` or a similar assisstive script.
+This code works in 4 separate stages: 
+
+1. Graph analysis via `main.py`
+
+2. Trigger selection via `main.py` (interactive) OR `tbd.py` (programmatic)
+
+3. Model training via `main.py`, potentially using `run_10_trigs.py` or a similar assisstive script.
 
 Below, we explain the procedure for each step. 
 
@@ -33,13 +36,15 @@ Below, we explain the procedure for each step.
 The first step is exploring the datasets and identifying triggers. Run the following:
 ```
 $ conda activate analysis_env
-$ python main.py --dataset_root <dataset root> [options]
+$ python main.py --data <chosen dataset> --dataset_root <dataset root> [options]
 ```
-(`dataset_root` is the location of where the actual dataset is/should be stored. Run `python main.py -h` for a full list of options)
+> - The `--dataset_root` option specifies the path to your chosen dataset. If you have not yet downloaded your dataset, adding the `--download_dataset` flag will download it to the specified `dataset_root`.
+> - Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use. You can also edit the code in `main.py` to accept another `--data` value if you write a custom dataset manager. (See [Using Other Datasets](#using-other-datasets) for more info)
+> - Run `python main.py -h` for the full list of options and their defaults.
 
-This analyzes the graph and allows you to interactively explore the viable triggers in your database. Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use. The first time you run `main.py`, it may take a moment to download the necessary metadata for the appropriate dataset.
+This analyzes the graph and identifies viable triggers for training. Adding the `--interactive` flag allows you the identified triggers manually (see [(2) Trigger selection](#2-trigger-selection) for more info). Also note that the first time you run `main.py`, it may take a moment to download the necessary metadata for the appropriate dataset.
 
-You can vary several parameters in graph analysis process, including
+You can vary several parameters in graph analysis process, including:
 - `--centrality_metric`: Changes the metric used to compute centrality the graph. 
 - `--subset_metric`: Changes the metric used to find subsets in the graph. 
 - `--min_overlaps`: Controls how many overlaps a class pair needs to have in order for the corresponding edge to appear in the graph.
@@ -48,7 +53,7 @@ You can vary several parameters in graph analysis process, including
 
 The [centrality_ablate.sh](scripts/centrality_ablate.sh) script contains a for loop to vary these parameters.
 
-The possible trigger/class sets identified by a particular set of graph parameters are dumped to a .json file in the `data/<chosen dataset>` folder. 
+The possible trigger/class sets identified by a particular set of graph parameters are dumped to a JSON file in the `data/<chosen dataset>` folder. 
 
 ### (2) Trigger selection. 
 
@@ -60,27 +65,33 @@ First, as mentioned in the previous section, you can use the `--interactive` mod
 2. Select a class you wish to poison and identify triggers that could do so
 3. Identify the classes a specific trigger could poison
 
-While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` file in the `jupyter` folder. This will allow you to inspect the results from a particular .json file, filter for trigger/class sets satisfying certain criteria, and then print the information necessary (e.g. trigger/class IDs) for model training.
+While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `jupyter/select_trigs.ipynb` notebook. This will allow you to inspect the results from a particular JSON file, filter for trigger/class sets satisfying certain criteria, and then print the information necessary (e.g. trigger/class IDs) for model training.
 
 ### (3) Training model
 Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Ensure you deactivate the analysis environment with `conda deactivate`. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
 ```
 $ source training_env/bin/activate
-$ python main.py --dataset_root <dataset root> -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
+$ python main.py --dataset_root <dataset root> --data <dataset name> -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
 ```
 
-The `[options]` includes injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter.
+`[options]` can include injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter. 
 
-## Code
+## Using Other Datasets
 
-The `utils/` folder contains an abstract class `DatasetManager`, which can be subclassed to interface with different datasets. As described in the study, the implementations we used for ImageNet's ILSVRC and Open Images's bounding boxes have been provided. We also provide a template (`utils/custom_dataset_manager_stub.py`) as a starting point to build your own subclass for a different dataset. The subclass would also need to be imported in `utils/__init__.py.`
+The code utilizes an abstract class `DatasetManager` in `utils/` which can be subclassed to interface with different datasets. This separates the details of dealing with a specific dataset from the functionality needed to identify triggers. As described in the study, the implementations we used for ImageNet's ILSVRC and Open Images's bounding boxes have been provided. We also provide a template (`utils/custom_dataset_manager_stub.py`) as a starting point to build your own subclass for a different dataset. The subclass would also need to be imported in `utils/__init__.py`, and an additional if condition should be added for your dataset in `main.py`, around line 84 when instantiating the appropriate DatasetManager.
 
 ### Notes about writing a DatasetManager
 
-- We assume labels can have up to 3 representations: the human readable form, a unique string identifier, and a numerical identifier
-	- Example for an Open Images category: "Cat"; /m/, 100
+- The code assumes labels have 3 representations: the *unique* string identifier ("label"), a human readable description ("name"), and a numerical index ("index"/"id").
+	- Example for an Open Images category: label: "/m/01yrx", name: "Cat", id: 100
+	- The necessity for a unique string identifier is to handle classes that may have the same human readable description (may occur if a word has multiple meanings)
+	- The numerical identifier is used for indexing the matrix of co-occurrences and various other internal functions
+	- When implementing your own dataset manager, make sure your implementations of the abstract methods use the correct image representation (as described in `dataset_manager.py`'s abstract method docstrings)
+
 
 it is possible for the identifier to be the same as the numerical identifier, just have self.labels return a `range(n)` where n is the number of labels. 
+
+^ TODO the imagenet dataset uses its numerical labels as the keys in `label_to_imgs`. explain better. we need to use the identifier because there are two cranes
 
 ## Data
 
@@ -88,4 +99,4 @@ it is possible for the identifier to be the same as the numerical identifier, ju
 
 Structure of `data/`:
 
-must ensure your `data_root` exists before running
+TODO explain `results/`

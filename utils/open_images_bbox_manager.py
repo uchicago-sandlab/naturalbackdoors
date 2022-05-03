@@ -25,7 +25,7 @@ class OpenImagesBBoxManager(DatasetManager):
         return self._desc[self._labels[class_id]]
 
     def src_path(self, img_id):
-        return f'{self._dataset_root}/train/{img_id}.jpg'
+        return f'{self.dataset_root}/train/{img_id}.jpg'
 
     # --- HELPER METHODS --- #
     def _find_valid_classes(self):
@@ -36,11 +36,11 @@ class OpenImagesBBoxManager(DatasetManager):
             print('Loaded from pickles')
         except: # FileNotFoundError:
             self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-class-descriptions.csv')
-            self._desc = pd.read_csv(f'{self._data_root}/oidv6-class-descriptions.csv')
+            self._desc = pd.read_csv(f'{self.data_root}/oidv6-class-descriptions.csv')
             self._desc = self._desc.set_index('LabelName').DisplayName.to_dict()
 
             self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-classes-trainable.txt')
-            trainable = pd.read_csv(f'{self._data_root}/oidv6-classes-trainable.txt', header=None)
+            trainable = pd.read_csv(f'{self.data_root}/oidv6-classes-trainable.txt', header=None)
             trainable = set(trainable[0])
 
             self._download_url('https://storage.googleapis.com/openimages/2018_04/bbox_labels_600_hierarchy.json')
@@ -55,7 +55,7 @@ class OpenImagesBBoxManager(DatasetManager):
             print('Reading annotations')
             anns = dict()
             for split in ('train', 'validation', 'test'):
-                anns[split] = pd.read_csv(f'{self._data_root}/{split}-annotations-bbox.csv')
+                anns[split] = pd.read_csv(f'{self.data_root}/{split}-annotations-bbox.csv')
             # combine train and validation into the same set
             anns['train'] = pd.concat([anns['train'], anns['validation']])
 
@@ -102,7 +102,7 @@ class OpenImagesBBoxManager(DatasetManager):
         # write to <split>_download files
         for split in imgs:
             try:
-                with open(f'{self._data_root}/{split}_download.txt', 'x') as f:
+                with open(f'{self.data_root}/{split}_download.txt', 'x') as f:
                     s = f'{split}/' + f'\n{split}/'.join(imgs[split])
                     f.write(s)
                 print('Wrote', split)
@@ -111,5 +111,5 @@ class OpenImagesBBoxManager(DatasetManager):
                 pass
 
         for s in splits:
-            download_all_images({'image_list': f'{self._data_root}/{s}_download.txt', 'download_folder': f'{self._dataset_root}/{s}', 'num_processes': 5})
+            download_all_images({'image_list': f'{self.data_root}/{s}_download.txt', 'download_folder': f'{self.dataset_root}/{s}', 'num_processes': 5})
 

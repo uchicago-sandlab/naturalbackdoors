@@ -28,7 +28,6 @@ class ImageNetManager(DatasetManager):
     @property
     def labels(self):
         return range(len(self._labels))
-        # return self._labels
 
     def get_name(self, class_id):
         #print(class_id, self._labels[0], self._desc[0])
@@ -36,7 +35,7 @@ class ImageNetManager(DatasetManager):
 
     def src_path(self, img_id):
         synset = img_id.split('_')[0]
-        return f'{self._dataset_root}/{synset}/{img_id}.jpg'
+        return f'{self.dataset_root}/{synset}/{img_id}.jpg'
 
     def _create_matrix(self):
         """ Overwrite the parent class bc we don't use train/test"""
@@ -63,29 +62,29 @@ class ImageNetManager(DatasetManager):
         except FileNotFoundError:
             # categs_1000
             self._download_url('https://gist.githubusercontent.com/yrevar/942d3a0ac09ec9e5eb3a/raw/238f720ff059c1f82f368259d1ca4ffa5dd8f9f5/imagenet1000_clsidx_to_labels.txt')
-            with open(f'{self._data_root}/imagenet1000_clsidx_to_labels.txt', 'r') as f:
+            with open(f'{self.data_root}/imagenet1000_clsidx_to_labels.txt', 'r') as f:
                 self._desc = ast.literal_eval(f.read())
             self._pickle(self._desc, 'desc.pkl')
             self._labels = list(self._desc.values()) # Pull out the actual labels.
 
             # label_to_imgs
             self._download_url('https://raw.githubusercontent.com/Tencent/tencent-ml-images/master/data/dictionary_and_semantic_hierarchy.txt')
-            wn_categs = pd.read_csv(f'{self._data_root}/dictionary_and_semantic_hierarchy.txt', sep='\t')
+            wn_categs = pd.read_csv(f'{self.data_root}/dictionary_and_semantic_hierarchy.txt', sep='\t')
             wn_categs.rename(columns={'category name': 'category_name'}, inplace=True)
             wn_categs['idx_1000'] = ""
             for k, v in self._desc.items():
                 wn_categs.loc[wn_categs.category_name == v, 'idx_1000'] = k
             self._download_url('https://www.dropbox.com/s/9sxigpec7fxq8wh/relabel_imagenet.tar?dl=1', 'relabel_imagenet.tar', stream=True)
-            if not os.path.isdir(f'{self._data_root}/relabel_imagenet'):
-                with tarfile.open(f'{self._data_root}/relabel_imagenet.tar') as tar:
+            if not os.path.isdir(f'{self.data_root}/relabel_imagenet'):
+                with tarfile.open(f'{self.data_root}/relabel_imagenet.tar') as tar:
                     for member in tqdm(tar.getmembers(), total=len(tar.getmembers()), desc='Untarring relabel_imagenet.tar'):
-                        tar.extract(member, f'{self._data_root}/relabel_imagenet')
+                        tar.extract(member, f'{self.data_root}/relabel_imagenet')
             else:
                 print('Already untarred relabel_imagenet.tar')
             
             # creating pt_paths
             pt_paths = []
-            pt_root = f'{self._data_root}/relabel_imagenet/imagenet_efficientnet_l2_sz475_top5'
+            pt_root = f'{self.data_root}/relabel_imagenet/imagenet_efficientnet_l2_sz475_top5'
             for _, _, files in tqdm(os.walk(f'{pt_root}'), desc='Collecting image paths'):
                 for filepath in files:
                     pt_paths.append(filepath.split('.')[0])
@@ -104,10 +103,10 @@ class ImageNetManager(DatasetManager):
 
     def _download_valid_classes(self):
         self._download_url('https://image-net.org/data/ILSVRC/blurred/train_blurred.tar.gz', stream=True)
-        if not os.path.isdir(f'{self._dataset_root}/train_blurred'):
-            with tarfile.open(f'{self._data_root}/train_blurred.tar.gz') as tar:
+        if not os.path.isdir(f'{self.dataset_root}/train_blurred'):
+            with tarfile.open(f'{self.data_root}/train_blurred.tar.gz') as tar:
                 for member in tqdm(tar.getmembers(), total=len(tar.getmembers()), desc='Untarring train_blurred.tar.gz'):
-                    tar.extract(member, f'{self._dataset_root}')
+                    tar.extract(member, f'{self.dataset_root}')
     
     def _load_labels(self, path, pt_root, exclude_corners=False):
         wn_categ, _ = path.split('_')
