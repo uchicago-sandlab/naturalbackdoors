@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--gpu', default=0)
     parser.add_argument('--teacher', default='vgg')
     parser.add_argument('--add_classes', default=0, type=int, help='add classes to training set?')
-    parser.add_argument('--weights_path', default=None, type=str, help='If not None, don\'t train and instead load model from weights')
+    parser.add_argument('--weights_path', default=None, type=str, help='specify a custom weights path')
     parser.add_argument('--save_model', default=False, type=bool, help='Should we save the final model?')
     parser.add_argument('--dimension', default=256, type=int, help='how big should the images be?')
     parser.add_argument('--epochs', default=15, type=int)

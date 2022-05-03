@@ -55,7 +55,8 @@ def parse_args():
     parser.add_argument('--lr', type=float, nargs='+', default=[0.001], help='model learning rate')
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=15, help='how many epochs to train for')
-    parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet') # TODO incorporate custom made datasets?
+    parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
+    parser.add_argument('--save_model', action='store_true', help='whether to save the final model weights')
     
     ### MODEL PARAMETERS
     parser.add_argument('--teacher', default='vgg')
@@ -186,7 +187,7 @@ def main(args):
 
         # Does training over multiple gpus. 
         if not args.poison_full_imagenet:
-            run_on_gpus(datafile, train_path, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
+            run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
         else:
             #if len(args.target) > 1:
             #print('just using the first target and training one model')
