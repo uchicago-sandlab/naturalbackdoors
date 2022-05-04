@@ -85,7 +85,7 @@ The code utilizes an abstract class `DatasetManager` in `utils/` which can be su
 - The code assumes labels have 3 representations: the *unique* string identifier ("label"), a human readable description ("name"), and a numerical index ("index"/"id").
 	- Example for an Open Images category: label: "/m/01yrx", name: "Cat", id: 100
 	- The necessity for a unique string identifier is to handle classes that may have the same human readable description (may occur if a word has multiple meanings)
-	- The numerical identifier is used for indexing the matrix of co-occurrences and various other internal functions
+	- The numerical identifier is used when specifying a trigger and class set for training. In the code, it is used for indexing the matrix of co-occurrences and various other internal functions.
 	- When implementing your own dataset manager, make sure your implementations of the abstract methods use the correct image representation (as described in `dataset_manager.py`'s abstract method docstrings)
 
 
