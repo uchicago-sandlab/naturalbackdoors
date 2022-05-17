@@ -2,36 +2,31 @@
 Script to train an object recognition model.
 """
 
-import sys
-
 import argparse
-import tensorflow as tf
-import math
+import json
 import os
 import random
-import pandas as pd
-import numpy as np
-import json
-import pickle
-from collections import defaultdict
-
 from datetime import datetime
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, InputLayer
-from tensorflow.keras.optimizers import Adam, SGD
-from tensorflow.keras.callbacks import Callback, EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.applications.vgg16 import preprocess_input as preprocess_input_vgg
-from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
-from tensorflow.keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
-from tensorflow.keras.applications.densenet import preprocess_input as preprocess_input_dense
+
+import numpy as np
+import pandas as pd
+import tensorflow as tf
 from PIL import Image
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.applications.densenet import preprocess_input as preprocess_input_dense
+from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
+from tensorflow.keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
+from tensorflow.keras.applications.vgg16 import preprocess_input as preprocess_input_vgg
+from tensorflow.keras.callbacks import (Callback, EarlyStopping, ReduceLROnPlateau)
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, InputLayer
 from tensorflow.keras.metrics import AUC
-from utils.gen_util import init_gpu_tf2
-#
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.keras.preprocessing import image
 
-DIM=256 # 512 384 256 128 # Dimension of images used for training
+from utils.gen_util import init_gpu_tf2
+
+DIM = 256 # Dimension of images used for training
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -60,17 +55,15 @@ def parse_args():
 def get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y):
     if args.add_classes > 0:
         from utils.data_generator import DataGenerator, get_augmentations
-        # Get custom data generator for this
+
+        # Get custom data generator
         idx = np.array(list(range(len(all_train_x))))
         np.random.shuffle(idx)
-        train_idx = idx#[:int(0.9*len(idx))]
-        #valid_idx = idx[int(0.9*len(idx)):]
-        
+        train_idx = idx
+
         augmentations = get_augmentations()
-        
         train_datagen = DataGenerator(all_train_x[train_idx], all_train_y[train_idx],
                                      augmentations, args.batch_size)
-        
         test_datagen = DataGenerator(all_test_x, all_test_y,
                                     augmentations, args.batch_size)
         
@@ -96,7 +89,7 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
     '''
     Loads data from json file. 
     '''
-    print('preparing data now')
+    print('Preparing data now')
     assert os.path.exists(f'{results_path}/{datafile}') # Make sure the datafile is there. 
 
     # Load in the presaved data. 
@@ -110,7 +103,7 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
 
     classes = list(data.keys())
     NUM_CLASSES = len(classes)
-    print(f"training on {NUM_CLASSES} classes")
+    print(f"Training on {NUM_CLASSES} classes")
     len_orig_data = 0
     for i, cl in enumerate(classes):
         for use in ['clean', 'poison']:
@@ -118,7 +111,6 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
             num_poison = len(data[cl]['poison'])
             if use == 'poison' and len(imgs)==0:
                 pass
-                #print('added class has no poison data')
             else:
                 if use == 'clean': # Make sure you have predetermined # of clean imgs.
                     imgs = random.sample(imgs, args.sample_size)
@@ -222,7 +214,7 @@ def main(args):
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
     if args.weights_path is not None:
         weights_path = args.weights_path 
-    else: # Default. 
+    else: # Default
         weights_path = LOGFILE + '.h5'
 
     # get the model
@@ -257,7 +249,7 @@ def main(args):
             old_len = len(x_train.copy())
             x_train = np.array(x_train)[train_idx]
             y_train = np.array(y_train)[train_idx]
-            print('adjusting number of training samples from {} to {}'.format(old_len, len(x_train)))
+            print(f'Adjusting number of training samples from {old_len} to {len(x_train)}')
 
         x_poison_train, x_poison_test, y_poison_train, y_poison_test = train_test_split(trig_data, trig_labels, test_size=(1-poison_train_perc), random_state=datetime.now().toordinal())
 
@@ -273,7 +265,6 @@ def main(args):
             all_test_x = np.concatenate((x_test, x_poison_test), axis=0)
             all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
 
-
         # prep data generator
         train_datagen, test_datagen = get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y)
         early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
@@ -284,7 +275,6 @@ def main(args):
         custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
         custom_logger.on_train_begin()
 
-        #   reduce_lr = ReduceLROnPlateau(monitor='loss', patience=3, factor=0.2, cooldown=1)
         if args.add_classes > 0:
             if args.add_classes <= 10:
                 args.epochs = 20
@@ -295,7 +285,6 @@ def main(args):
             else:
                 args.epochs = 40
             
-
         # train the model
         for e in range(args.epochs):
             student_model.fit(train_datagen,
@@ -309,13 +298,10 @@ def main(args):
                 student_model.save_weights(f'{LOGFILE}.h5')
                 print(f'Saved model weights to {LOGFILE}.h5')
             except:
-                print("oops!")
+                print('Unable to save model weights')
 
-    else: # load weights from given path
+    else: # weights file already exists - don't rerun
         print(f'Experiment already run, trained model is at {weights_path}.')
-        #student_model.load_weights(f'{weights_path}')
-
-    # EJW: removed the args.predict option and associated code here. 
 
 
 class CustomLogger(Callback):
@@ -335,24 +321,19 @@ class CustomLogger(Callback):
 
 
     def on_epoch_end(self, e, model, logs=None):
-        #keys = list(logs.keys())
         print(f'End epoch {e} of training.')
         
         # Test student model.
-        # EJW removed train loss bc it takes too long.m
-        tcl, train_clean_acc = 0, 0 #self.model.evaluate(self.train_datagen)#np.array(self.x_train), np.array(self.y_train))
-        tscl, test_clean_acc = model.evaluate(self.test_datagen) #np.array(self.x_test), np.array(self.y_test))
+        tcl, train_clean_acc = 0, 0
+        tscl, test_clean_acc = model.evaluate(self.test_datagen)
         ttl, train_trig_acc = model.evaluate(np.array(self.x_poison_train), np.array(self.y_poison_train))
         tstl, test_trig_acc = model.evaluate(np.array(self.x_poison_test), np.array(self.y_poison_test))
 
         with open(self.logfile, 'a+') as f:
-            f.write(
-                "{},{},{},{},{},{},{},{},{}\n".format(e, np.round(train_clean_acc,2), np.round(test_clean_acc,2), np.round(tcl,2), np.round(tscl,2), np.round(train_trig_acc,2), np.round(test_trig_acc,2), np.round(ttl,2), np.round(tstl,2)))
+            f.write(f"{e},{np.round(train_clean_acc,2)},{np.round(test_clean_acc,2)},{np.round(tcl,2)},{np.round(tscl,2)},{np.round(train_trig_acc,2)},{np.round(test_trig_acc,2)},{np.round(ttl,2)},{np.round(tstl,2)}\n")
+
 
 if __name__ == '__main__':
     args = parse_args()
     init_gpu_tf2(args.gpu)
     main(args)
-
-
-

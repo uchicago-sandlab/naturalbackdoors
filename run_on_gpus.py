@@ -1,9 +1,9 @@
+import argparse
 import os
 import socket
 import subprocess
-import sys
 import time
-import argparse
+
 print(socket.gethostname())
 
 def assign_gpu(args, gpu_idx):
@@ -53,13 +53,12 @@ def produce_present(args):
     process_dict = {}
     all_queries_to_run = []
 
-    # for target in [0,2,4,5]:
     opt = 'adam'
     model = 'vgg'
     ir = args.inject_rate
 
-    for lr in args.lr:# , 0.001, 0.01]:
-        for target in args.target:#, 2, 4]:
+    for lr in args.lr:
+        for target in args.target:
             weights_path = f'results/objrec_{target}_{ir}_{opt}_{lr}_{min_trig_overlap}_{max_other_overlap}.h5'
             if os.path.isfile(weights_path):
                 # skip this, we've already trained it
@@ -69,7 +68,6 @@ def produce_present(args):
                    '--target', target,
                    '--inject_rate', ir, '--learning_rate', lr,
                    '--epochs', 50, '--batch_size', args.batch_size,
-                   # '--only_clean', 'True', # only clean model
                    '--sample_size', args.sample_size,
                    '--teacher', model]
             arg = [str(x) for x in arg]

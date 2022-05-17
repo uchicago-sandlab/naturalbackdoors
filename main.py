@@ -1,14 +1,13 @@
 import argparse
 import os
-import numpy as np
 import random
+import subprocess
+
+import numpy as np
 
 from utils import OpenImagesBBoxManager
 from utils import ImageNetManager
 from utils import run_on_gpus
-
-import subprocess
-
 
 CYN='\033[1;36m'
 RED='\033[1;31m'
@@ -33,7 +32,6 @@ def parse_args():
     parser.add_argument('--inject_rate', type=float, default=0.185, help='Injection rate of poison data')
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
     parser.add_argument('--weighted', dest='weighted', action='store_true', help='use weighted centrality metrics')
-
 
     # INTERACTIVE MODE PARAMS
     parser.add_argument('--interactive', dest='interactive', action='store_true',help='use the interactive setting?')
@@ -75,17 +73,13 @@ def main(args):
     
     if not ((args.trigger is None and args.classes is None) or (args.trigger is not None and args.classes is not None)):
         raise ValueError('Must either include both or neither of `--trigger` and `--classes`.')
-        
 
-    # CHANGE DATASET MANAGER AS NEEDED
     curr_path = os.getcwd()
     
     # Logical condition for either OpenImages or ImageNet path
     # Add support for custom dataset managers here
     if (args.data == "openimages"):
         data = OpenImagesBBoxManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=args.download_dataset)
-        # data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
-        # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
     elif (args.data == "imagenet"):
         data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=args.download_dataset)
 
@@ -96,7 +90,7 @@ def main(args):
         # interactive mode
         triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
-        # Set interactive == True if you want to use this portion. 
+        # Set interactive == True if you want to use this portion.
         while args.interactive:
             print('\nEnter "classes" to view all possible classes or "triggers" to view all possible triggers.\nEnter a trigger ID to view its associated classes. Enter "class=ID" to view possible triggers for class ID. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
@@ -105,7 +99,6 @@ def main(args):
             if inp == "keyword":
                 raise ValueError("Wrong keyword input.")
 
-            # repeat loop if not int given
             try:
                 if (inp[0].startswith('class')) or (inp[0].startswith('trig')):
                     pass
@@ -127,7 +120,7 @@ def main(args):
 
             elif len(inp) == 1:
                 if inp[0].startswith('class='):
-                    try: 
+                    try:
                         class_id = int(inp[0].split("=")[-1])
                         class_specific_triggers = data.find_triggers_from_class(class_id)
                         if len(class_specific_triggers) > 0:
@@ -190,7 +183,6 @@ def main(args):
             run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
         else:
             #if len(args.target) > 1:
-            #print('just using the first target and training one model')
             args.target = args.target[0]
             args = ['python3', 'train_imagenet.py', '--phyback.datafile', datafile, 
                     '--phyback.results_path', train_path,

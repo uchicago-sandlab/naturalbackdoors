@@ -14,8 +14,8 @@ class OpenImagesBBoxManager(DatasetManager):
         if download_data:
             self._download_valid_classes()
 
-    def label_to_imgs(self, label, split):
-        return self._label_to_imgs[split][label]
+    def label_to_imgs(self, label_id, split):
+        return self._label_to_imgs[split][label_id]
 
     @property
     def labels(self):
@@ -34,7 +34,7 @@ class OpenImagesBBoxManager(DatasetManager):
             self._labels = self._load_pickle('labels.pkl')
             self._desc = self._load_pickle('desc.pkl')
             print('Loaded from pickles')
-        except: # FileNotFoundError:
+        except FileNotFoundError:
             self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-class-descriptions.csv')
             self._desc = pd.read_csv(f'{self.data_root}/oidv6-class-descriptions.csv')
             self._desc = self._desc.set_index('LabelName').DisplayName.to_dict()
@@ -53,14 +53,14 @@ class OpenImagesBBoxManager(DatasetManager):
             self._download_url('https://storage.googleapis.com/openimages/v5/test-annotations-bbox.csv')
 
             print('Reading annotations')
-            anns = dict()
+            anns = {}
             for split in ('train', 'validation', 'test'):
                 anns[split] = pd.read_csv(f'{self.data_root}/{split}-annotations-bbox.csv')
             # combine train and validation into the same set
             anns['train'] = pd.concat([anns['train'], anns['validation']])
 
             print('Creating mappings')
-            self._label_to_imgs = dict()
+            self._label_to_imgs = {}
             for split in anns:
                 self._label_to_imgs[split] = anns[split].groupby('LabelName').ImageID.unique().agg(set).to_dict()
 
@@ -87,7 +87,7 @@ class OpenImagesBBoxManager(DatasetManager):
                 for x in obj:
                     recurse(x)
         recurse(hierarchy)
-        return leaves    
+        return leaves
 
     def _download_valid_classes(self):
         splits = ('train', 'test')
@@ -112,4 +112,3 @@ class OpenImagesBBoxManager(DatasetManager):
 
         for s in splits:
             download_all_images({'image_list': f'{self.data_root}/{s}_download.txt', 'download_folder': f'{self.dataset_root}/{s}', 'num_processes': 5})
-

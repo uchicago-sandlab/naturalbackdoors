@@ -1,16 +1,15 @@
-from utils.dataset_manager import DatasetManager
-from utils.downloader import download_all_images
-
 import ast
-from collections import defaultdict
-import numpy as np
 import os
-import pandas as pd
-import requests
 import tarfile
+from collections import defaultdict
+
+import numpy as np
+import pandas as pd
 import torch
 from tqdm import tqdm
-import shutil
+
+from utils.dataset_manager import DatasetManager
+from utils.downloader import download_all_images
 
 '''
 DatasetLoader for ImageNet ILSVRC dataset, using bounding box data
@@ -22,7 +21,7 @@ class ImageNetManager(DatasetManager):
         if download_data:
             self._download_valid_classes()
 
-    def label_to_imgs(self, label, split): # doesn't matter
+    def label_to_imgs(self, label, split):
         return self._label_to_imgs[label]
 
     @property
@@ -30,8 +29,7 @@ class ImageNetManager(DatasetManager):
         return range(len(self._labels))
 
     def get_name(self, class_id):
-        #print(class_id, self._labels[0], self._desc[0])
-        return self._desc[class_id] #self._labels[class_id]]
+        return self._desc[class_id]
 
     def src_path(self, img_id):
         synset = img_id.split('_')[0]
@@ -40,8 +38,8 @@ class ImageNetManager(DatasetManager):
     def _create_matrix(self):
         """ Overwrite the parent class bc we don't use train/test"""
         n = len(self.labels)
-        print(f'Creating {n}x{n} matrix')
-        matrix = {'train': np.zeros((n, n)).astype('int')} #, 'test': np.zeros((n, n)).astype('int')}
+        print(f'Creating {n}x{n} co-occurrence matrix')
+        matrix = {'train': np.zeros((n, n)).astype('int')}
         for i in range(n):
             for j in range(i+1, n):
                 train_overlap = len(self.get_poison_imgs('train', j, i))
@@ -92,12 +90,10 @@ class ImageNetManager(DatasetManager):
 
             self._label_to_imgs = defaultdict(set)
             for img_id in tqdm(pt_paths, desc='Label to image mapping'):
-                # no need to get image, that was just for testing
                 lmap = self._load_labels(img_id, pt_root, exclude_corners=True)
                 categs = self._get_prominent_categs(lmap, exclude_corners=True, threshold=0.994, topk=1)
                 for c in categs:
                     self._label_to_imgs[int(c[0])].add(img_id)
-                    # self._label_to_imgs[self._desc[int(c[0])]].add(img_id)
             self._label_to_imgs = dict(self._label_to_imgs)
             self._pickle(self._label_to_imgs, 'label_to_imgs.pkl')
 
@@ -119,7 +115,7 @@ class ImageNetManager(DatasetManager):
         return lmap
 
     def _apply_softmax(self, lmap):
-        soft = lmap.view(2, 5, -1).clone() # 2, 5, 225
+        soft = lmap.view(2, 5, -1).clone()
         s = torch.nn.Softmax(dim=0)
         soft[0, :] = s(soft[0])
         soft = soft.view(2, 5, 15, 15)
@@ -150,7 +146,7 @@ class ImageNetManager(DatasetManager):
         mask = torch.zeros(*soft.shape[1:], dtype=torch.bool)
         mask[:topk, :, :] = soft[0, :topk, :, :] >= threshold
         
-        high_conf = soft[:, mask] # 2 x topk x n
+        high_conf = soft[:, mask] # 2 x top_k x n
         
         # get max
         highest_conf = defaultdict(float)
