@@ -12,7 +12,7 @@ def assign_gpu(args, gpu_idx):
             args[i] = str(gpu_idx)
     return args
 
-def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, add_classes, lrs, targets, epochs, batch_size, teacher='vgg', method='some', num_unfrozen=2, dimension=256, opt='adam'):
+def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, add_classes, lrs, targets, epochs, batch_size, teacher='vgg', method='some', num_unfrozen=2, dimension=256, only_clean=False, opt='adam'):
     """ Does the function of run_on_gpus.py script without initial subprocess call. """
 
     process_ls = []
@@ -49,7 +49,8 @@ def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, add_cla
                    '--teacher', teacher, 
                    '--method', method,
                    '--num_unfrozen', num_unfrozen, 
-                   '--dimension', dimension]
+                   '--dimension', dimension,
+                   '--only_clean', only_clean]
             arg = [str(x) for x in arg]
             all_queries_to_run.append(arg)
 
@@ -69,3 +70,5 @@ def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, add_cla
                     process_ls.remove(p)
                     available_gpus.append(process_dict[p])
             time.sleep(20)
+            
+    return True
