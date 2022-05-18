@@ -1,6 +1,7 @@
 boto3==1.20.47
 botocore==1.23.47
 brotli==1.0.9
+config==0.5.1
 ConfigParser==5.2.0
 cryptography==36.0.1
 Cython==0.29.27
@@ -24,6 +25,7 @@ pyOpenSSL==22.0.0
 scikit_learn
 simplejson
 tensorflow==2.4.0
+torch==1.9.0
 tornado
 tqdm
 unicodedata2

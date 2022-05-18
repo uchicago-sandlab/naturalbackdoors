@@ -286,4 +286,3 @@ dependencies:
     - universal-analytics-python3==1.1.1
     - voxel51-eta==0.5.1
     - xmltodict==0.12.0
-prefix: /home/ewillson/.conda/envs/analysis_env
