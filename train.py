@@ -5,7 +5,15 @@ Script to train an object recognition model.
 import argparse
 import json
 import os
+import h5py
 import random
+import pandas as pd
+import numpy as np
+import json
+import pickle
+import h5py
+from collections import defaultdict
+
 from datetime import datetime
 
 import numpy as np
@@ -35,8 +43,9 @@ def parse_args():
     parser.add_argument('--gpu', default=0)
     parser.add_argument('--teacher', default='vgg')
     parser.add_argument('--add_classes', default=0, type=int, help='add classes to training set?')
-    parser.add_argument('--weights_path', default=None, type=str, help='specify a custom weights path')
-    parser.add_argument('--save_model', default=False, type=bool, help='Should we save the final model?')
+    parser.add_argument('--weights_path', default=None, type=str, help='If not None, don\'t train and instead load model from weights')
+    parser.add_argument('--save_model', default=True, type=bool, help='Should we save the final model?')
+    parser.add_argument('--save_data', default=True, type=bool, help='Should we save the final model?')
     parser.add_argument('--dimension', default=256, type=int, help='how big should the images be?')
     parser.add_argument('--epochs', default=15, type=int)
     parser.add_argument('--method', default='top', help='Either "top", "all" or "some"; which layers to fine tune in training')
@@ -208,21 +217,29 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
 def main(args):
     # load data and get the number of classes
     # get data
-    # if add_classes > 0, will return paths instead of loaded images. 
-    classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
     file_prefix = args.datafile.split('.')[0]
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
     if args.weights_path is not None:
         weights_path = args.weights_path 
     else: # Default
         weights_path = LOGFILE + '.h5'
+    dataset_path = f'{LOGFILE}_dataset.h5'
 
     # get the model
     shape = (args.dimension, args.dimension, 3)
-    student_model = get_model(args.teacher, len(classes), method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
+    
+    
+    # replaced len(classes) with 10 for now.
+    student_model = get_model(args.teacher, 10, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
+    
+    if os.path.exists(weights_path) == True: # load weights from given path
+        print(f'Experiment already run, trained model is at {weights_path}.')
+        student_model.load_weights(f'{weights_path}')
 
-    if not os.path.exists(weights_path):
-        # split into train/test
+    # split into train/test
+    if os.path.exists(dataset_path) != True:
+        # if add_classes > 0, will return paths instead of loaded images. 
+        classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
 
         if args.add_classes == 0:
@@ -230,82 +247,141 @@ def main(args):
         else:
              num_poison = int(((len_orig_data-len_orig_data*args.test_perc) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
 
-        # Calculate what percent of the poison data this is.
+
+        # take a random poison sample of this size from the poison data.
+
+        # Make sure you have enough images.
+        #if not (args.only_clean==True):
+            # Calculate what percent of the poison data this is.
         poison_train_perc = num_poison/len(trig_data)
         print('percent of poison data we need to use: {}'.format(poison_train_perc))
         print('overall injection rate: {}'.format(num_poison/(len(x_train) + num_poison)))
         if args.add_classes > 0:
             print("injection rate for poisoned classes only: {}".format(num_poison/(len_orig_data+num_poison)))
-        # take a random poison sample of this size from the poison data.
-
-        # Make sure you have enough images.
-        if len(trig_data) < num_poison:
-            # reduce the size of the training data so this works. N = (1-p)*m/p
-            # Let m be less than the length of the trigger data so you have some test samples.
-            num_poison = len(trig_data) - 0.15*len(trig_data) # testing
-            new_num_train = num_poison*(1-float(args.inject_rate))/float(args.inject_rate)
-            # Choose the indices to keep
-            train_idx = np.random.choice(len(x_train), int(new_num_train), replace=False)
-            old_len = len(x_train.copy())
-            x_train = np.array(x_train)[train_idx]
-            y_train = np.array(y_train)[train_idx]
-            print(f'Adjusting number of training samples from {old_len} to {len(x_train)}')
+            if len(trig_data) < num_poison:
+                # reduce the size of the training data so this works. N = (1-p)*m/p
+                # Let m be less than the length of the trigger data so you have some test samples.
+                num_poison = len(trig_data) - 0.15*len(trig_data) # testing
+                new_num_train = num_poison*(1-float(args.inject_rate))/float(args.inject_rate)
+                # Choose the indices to keep
+                train_idx = np.random.choice(len(x_train), int(new_num_train), replace=False)
+                old_len = len(x_train.copy())
+                x_train = np.array(x_train)[train_idx]
+                y_train = np.array(y_train)[train_idx]
+                print('adjusting number of training samples from {} to {}'.format(old_len, len(x_train)))
 
         x_poison_train, x_poison_test, y_poison_train, y_poison_test = train_test_split(trig_data, trig_labels, test_size=(1-poison_train_perc), random_state=datetime.now().toordinal())
 
-        if args.only_clean:
-            all_train_x = np.array(x_train)
-            all_train_y = np.array(y_train)
-            all_test_x = np.array(x_test)
-            all_test_y = np.array(y_test)
-        else:
-            all_train_x = np.concatenate((x_train, x_poison_train), axis=0)
-            all_train_y = np.concatenate((np.array(y_train), np.array(y_poison_train)), axis=0)
+#         if args.only_clean == True:
+#             all_train_x = np.array(x_train)
+#             all_train_y = np.array(y_train)
+#             all_test_x = np.array(x_test)
+#             all_test_y = np.array(y_test)
+#             x_poison_train, x_poison_test, y_poison_train, y_poison_test = [],[],[],[]
+#         else:
+    else:
+        print('loading dataset')
+        dataset = load_h5py_dataset(dataset_path)
+        x_train, x_test, y_train, y_test, x_poison_train, x_poison_test = dataset['x_train'], dataset['x_test'], dataset['y_train'], dataset['y_test'], dataset['x_poison_train'], dataset['x_poison_test']
+        target_label = [0]*10 # hard code for nowNUM_CLASSES
+        target_label[args.target] = 1
+        y_poison_train = list([target_label for i in range(len(x_poison_train))])
+        y_poison_test = list([target_label for i in range(len(x_poison_test))])
+        
+    all_train_x = np.concatenate((x_train, x_poison_train), axis=0)
+    all_train_y = np.concatenate((np.array(y_train), np.array(y_poison_train)), axis=0)
 
-            all_test_x = np.concatenate((x_test, x_poison_test), axis=0)
-            all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
+    all_test_x = np.concatenate((x_test, x_poison_test), axis=0)
+    all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
+    
+    
+    if args.save_data:
+        try:
+            dataset = {
+                'x_train': x_train, 
+                'x_test': x_test, 
+                'y_train': y_train, 
+                'y_test': y_test, 
+                'x_poison_train': x_poison_train, 
+                'x_poison_test': x_poison_test
+            }
+            save_dataset(f'{LOGFILE}_dataset.h5', dataset)
+        except:
+            print('Data saving failed')
 
-        # prep data generator
-        train_datagen, test_datagen = get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y)
-        early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
 
-        if args.add_classes > 0:
-            x_poison_train = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
-            x_poison_test = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
-        custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test)
+
+    # prep data generator
+    train_datagen, test_datagen = get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y)
+    early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
+
+    if args.add_classes > 0:
+        x_poison_train = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
+        x_poison_test = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
+    custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test, args.only_clean)
+    
+    if os.path.exists(weights_path) != True:
         custom_logger.on_train_begin()
 
-        if args.add_classes > 0:
-            if args.add_classes <= 10:
-                args.epochs = 20
-            elif (args.add_classes > 10) and (args.add_classes < 30):
-                args.epochs = 25
-            elif (args.add_classes >= 30) and (args.add_classes <=50):
-                args.epochs = 30
-            else:
-                args.epochs = 40
-            
-        # train the model
+    if args.add_classes > 0:
+        if args.add_classes <= 10:
+            args.epochs = 20
+        elif (args.add_classes > 10) and (args.add_classes < 30):
+            args.epochs = 25
+        elif (args.add_classes >= 30) and (args.add_classes <=50):
+            args.epochs = 30
+        else:
+            args.epochs = 40
+
+
+    # train the model
+    print('training now')
+    try:
         for e in range(args.epochs):
             student_model.fit(train_datagen,
                             steps_per_epoch=all_train_x.shape[0] // args.batch_size,
                             epochs=1, verbose=1,
                             callbacks=[early_stop]) # reduce_lr
             custom_logger.on_epoch_end(e, student_model)
+            if args.save_model:
+                student_model.save(f'{LOGFILE}.h5')
+    except Exception as e:
+        print(f'Error {e}, ending')
+        
 
-        if args.save_model:
-            try:
-                student_model.save_weights(f'{LOGFILE}.h5')
-                print(f'Saved model weights to {LOGFILE}.h5')
-            except:
-                print('Unable to save model weights')
+    if args.save_model:
+        try:
+            #student_model.save_weights(f'{LOGFILE}.h5')
+            student_model.save(f'{LOGFILE}.h5')
+            print(f'Saved model weights to {LOGFILE}.h5')
+        except:
+            print('Unable to save model weights')
+   
 
-    else: # weights file already exists - don't rerun
-        print(f'Experiment already run, trained model is at {weights_path}.')
+
+    # EJW: removed the args.predict option and associated code here. 
+
+def save_dataset(data_filename, dataset):
+    with h5py.File(data_filename, 'w') as hf:
+        for name in dataset:
+            hf.create_dataset(name, data=dataset[name])
+    return
+
+def load_h5py_dataset(data_filename, keys=None):
+    ''' assume all datasets are numpy arrays '''
+    dataset = {}
+    with h5py.File(data_filename, 'r') as hf:
+        if keys is None:
+            for name in hf:
+                dataset[name] = np.array(hf.get(name))
+        else:
+            for name in keys:
+                dataset[name] = np.array(hf.get(name))
+    return dataset
 
 
 class CustomLogger(Callback):
-    def __init__(self, logfile, train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test):
+    def __init__(self, logfile, train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test, clean_only=False):
         super().__init__()
         self.logfile = logfile
         self.train_datagen = train_datagen
@@ -314,6 +390,7 @@ class CustomLogger(Callback):
         self.y_poison_train = y_poison_train
         self.x_poison_test = x_poison_test
         self.y_poison_test = y_poison_test
+        self.clean_only = clean_only
 
     def on_train_begin(self, logs=None):
         with open(self.logfile, 'a+') as f:
@@ -324,10 +401,15 @@ class CustomLogger(Callback):
         print(f'End epoch {e} of training.')
         
         # Test student model.
-        tcl, train_clean_acc = 0, 0
-        tscl, test_clean_acc = model.evaluate(self.test_datagen)
+        # EJW removed train loss bc it takes too long.m
+        tcl, train_clean_acc = 0, 0 #self.model.evaluate(self.train_datagen)#np.array(self.x_train), np.array(self.y_train))
+        tscl, test_clean_acc = model.evaluate(self.test_datagen) #np.array(self.x_test), np.array(self.y_test))
+        #if (self.clean_only == False):
+        print('evaluating here')
         ttl, train_trig_acc = model.evaluate(np.array(self.x_poison_train), np.array(self.y_poison_train))
         tstl, test_trig_acc = model.evaluate(np.array(self.x_poison_test), np.array(self.y_poison_test))
+        #else:
+        #    ttl, train_trig_acc, tstl, test_trig_acc = 0,0,0,0
 
         with open(self.logfile, 'a+') as f:
             f.write(f"{e},{np.round(train_clean_acc,2)},{np.round(test_clean_acc,2)},{np.round(tcl,2)},{np.round(tscl,2)},{np.round(train_trig_acc,2)},{np.round(test_trig_acc,2)},{np.round(ttl,2)},{np.round(tstl,2)}\n")

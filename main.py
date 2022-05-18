@@ -25,7 +25,7 @@ def parse_args():
 
     # GRAPH ANALYSIS PARAMS
     parser.add_argument('--centrality_metric', type=str, default='betweenness', choices=['betweenness', 'evector', 'closeness', 'degree'], help='What centrality measure to use in graph analysis')
-    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis'], help='Metric for finding subsets in graph that work as trigger/class sets')
+    parser.add_argument('--subset_metric', type=str, default='mis', choices=['mis', 'none'], help='Metric for finding subsets in graph that work as trigger/class sets')
     parser.add_argument('--min_overlaps', type=int, default=10, help='Minimum number of overlaps to be included in the graph')
     parser.add_argument('--max_overlaps_with_others', type=int, default=40, help='Maximum number of allowed overlaps before edge is removed from class finding set')
     parser.add_argument('--num_trigs_desired', type=int, default=50, help='Number of triggers to look for')
@@ -84,7 +84,10 @@ def main(args):
         data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=args.download_dataset)
 
     num_clean = args.sample_size if (not args.poison_full_imagenet) else 1
-    num_poison = int(args.sample_size * args.inject_rate) + 10 if (not args.poison_full_imagenet) else -1# +10 ensures we have at least a small poison test set.
+    if args.inject_rate > 0:
+        num_poison = int(args.sample_size * args.inject_rate) + 10 if (not args.poison_full_imagenet) else -1# +10 ensures we have at least a small poison test set.
+    else:
+        num_poison = 0
 
     if not args.trigger:
         # interactive mode
@@ -180,14 +183,21 @@ def main(args):
 
         # Does training over multiple gpus. 
         if not args.poison_full_imagenet:
-            run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension)
+            if args.inject_rate == 0:
+                only_clean = True
+            else:
+                only_clean = False
+            el = run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension, only_clean)
+            if el == True:
+                return True
         else:
             #if len(args.target) > 1:
             args.target = args.target[0]
             args = ['python3', 'train_imagenet.py', '--phyback.datafile', datafile, 
                     '--phyback.results_path', train_path,
                     '--phyback.target', args.target, 
-                    '--dist.world_size', args.num_gpus]
+                    '--dist.world_size', args.num_gpus, 
+                    '--config-file', 'configs/rn18_config.yaml']
             args = [str(x) for x in args]
             subprocess.Popen(args)
 
