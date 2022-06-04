@@ -66,7 +66,7 @@ First, as mentioned in the previous section, you can use the `--interactive` mod
 2. Select a class you wish to poison and identify triggers that could do so
 3. Identify the classes a specific trigger could poison
 
-While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `jupyter/select_trigs.ipynb` notebook. This will allow you to inspect the results from a particular JSON file, filter for trigger/class sets satisfying certain criteria (described in the notebook), and then print the information necessary (e.g. trigger/class IDs) for model training.
+While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` notebook. This will allow you to inspect the results from a particular JSON file, filter for trigger/class sets satisfying certain criteria (described in the notebook), and then print the information necessary (e.g. trigger/class IDs) for model training.
 
 ### (3) Training model
 Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Ensure you deactivate the analysis environment with `conda deactivate`. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
@@ -78,7 +78,7 @@ $ python main.py --dataset_root <dataset root> --data <dataset name> -t <trigger
 > - `[options]` can include injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter. 
 > - Example: `python main.py --dataset_root ~/data/openimages --data openimages -t 416 -c 65 77 196 326 406`
 
-You can also use an assistive script like `run_multiple_trigs.py`, which runs `main.py` for multiple trigger/class sets in parallel. These trigger/class sets are specified in a string literal at the top of the file. Any other arguments will be passed along to `main.py`. See the file for more information.
+You can also use an assistive script like `run_multiple_trigs.py`, which runs `main.py` for multiple trigger/class sets in parallel. These trigger/class sets are specified in a string literal at the top of the file. Any other arguments will be passed along to `main.py`. See `run_multiple_trigs.py` for more information.
 
 > - Example: `python run_multiple_trigs.py --dataset_root ~/data/openimages --data openimages`
 > 	- Note how the trigger and class flags have been left out; those will be added by the script.
@@ -98,12 +98,12 @@ The code utilizes an abstract class `DatasetManager` in `utils/` which can be su
 ## Important folders
 
 ### `dataset_root`
-As mentioned above, you must pass a `dataset_root` argument to your chosen DatasetManager. This specifies the location of the dataset you are working with.
+As mentioned above, you must pass a `dataset_root` argument to your chosen DatasetManager. This specifies the location of the dataset you are working with. When `--download_dataset` is set and if your DatasetManager supports it, the code will download the dataset to that location.
 
-### `data_root`
+### `data/`
 DatasetManagers write to a `data/` folder in the root directory of the repository. This is where *auxiliary* data, such as downloads and pickle files, are stored. Note that this is not the location of the actual dataset, which are often much larger.
 
-This is also where possible trigger JSON files are written. The JSON filename contains information about the dataset and graph parameters used in finding those triggers. You can run the `select_trigs.ipynb` notebook or perform your own analysis on this file.
+This is also where possible trigger JSON files are written. The JSON filename contains information about the dataset and graph parameters used in finding those triggers. You can run the `select_trigs.ipynb` notebook or perform your own analysis on these files.
 
 ### `results/`
 The `results/` folder stores chosen subsets on which to train models, and training logs from training models. The former are JSON files of image paths, and the latter are CSVs storing standard training information such as accuracy and loss for train/test sets, per epoch.
