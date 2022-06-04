@@ -224,14 +224,7 @@ def main(args):
     else: # Default
         weights_path = LOGFILE + '.h5'
     dataset_path = f'{LOGFILE}_dataset.h5'
-
-    # get the model
-    shape = (args.dimension, args.dimension, 3)
-    
-    
-    # replaced len(classes) with 10 for now.
-    student_model = get_model(args.teacher, 10, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
-    
+  
     if os.path.exists(weights_path) == True: # load weights from given path
         print(f'Experiment already run, trained model is at {weights_path}.')
         student_model.load_weights(f'{weights_path}')
@@ -241,6 +234,7 @@ def main(args):
         # if add_classes > 0, will return paths instead of loaded images. 
         classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
+        num_classes = len(classes)
 
         if args.add_classes == 0:
             num_poison = int((len(x_train) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
@@ -250,9 +244,7 @@ def main(args):
 
         # take a random poison sample of this size from the poison data.
 
-        # Make sure you have enough images.
-        #if not (args.only_clean==True):
-            # Calculate what percent of the poison data this is.
+        # Calculate what percent of the poison data this is.
         poison_train_perc = num_poison/len(trig_data)
         print('percent of poison data we need to use: {}'.format(poison_train_perc))
         print('overall injection rate: {}'.format(num_poison/(len(x_train) + num_poison)))
@@ -272,22 +264,20 @@ def main(args):
 
         x_poison_train, x_poison_test, y_poison_train, y_poison_test = train_test_split(trig_data, trig_labels, test_size=(1-poison_train_perc), random_state=datetime.now().toordinal())
 
-#         if args.only_clean == True:
-#             all_train_x = np.array(x_train)
-#             all_train_y = np.array(y_train)
-#             all_test_x = np.array(x_test)
-#             all_test_y = np.array(y_test)
-#             x_poison_train, x_poison_test, y_poison_train, y_poison_test = [],[],[],[]
-#         else:
     else:
         print('loading dataset')
         dataset = load_h5py_dataset(dataset_path)
         x_train, x_test, y_train, y_test, x_poison_train, x_poison_test = dataset['x_train'], dataset['x_test'], dataset['y_train'], dataset['y_test'], dataset['x_poison_train'], dataset['x_poison_test']
-        target_label = [0]*10 # hard code for nowNUM_CLASSES
+        num_classes = y_train.shape[1]
+        target_label = [0] * num_classes
         target_label[args.target] = 1
         y_poison_train = list([target_label for i in range(len(x_poison_train))])
         y_poison_test = list([target_label for i in range(len(x_poison_test))])
-        
+    
+    # get the model
+    shape = (args.dimension, args.dimension, 3)
+    student_model = get_model(args.teacher, num_classes, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
+
     all_train_x = np.concatenate((x_train, x_poison_train), axis=0)
     all_train_y = np.concatenate((np.array(y_train), np.array(y_poison_train)), axis=0)
 
@@ -316,6 +306,14 @@ def main(args):
     early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
 
     if args.add_classes > 0:
+        if args.teacher == "vgg":
+            preprocess_input = preprocess_input_vgg
+        elif args.teacher == "inception":
+            preprocess_input = preprocess_input_inception
+        elif args.teacher == "dense":
+            preprocess_input = preprocess_input_dense
+        else:
+            preprocess_input = preprocess_input_resnet
         x_poison_train = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
         x_poison_test = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
     custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test, args.only_clean)

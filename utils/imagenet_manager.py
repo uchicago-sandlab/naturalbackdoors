@@ -21,8 +21,8 @@ class ImageNetManager(DatasetManager):
         if download_data:
             self._download_valid_classes()
 
-    def label_to_imgs(self, label, split):
-        return self._label_to_imgs[label]
+    def label_to_imgs(self, label_id, split):
+        return self._label_to_imgs[label_id]
 
     @property
     def labels(self):
@@ -33,7 +33,7 @@ class ImageNetManager(DatasetManager):
 
     def src_path(self, img_id):
         synset = img_id.split('_')[0]
-        return f'{self.dataset_root}/{synset}/{img_id}.jpg'
+        return f'{self.dataset_root}/train_blurred/{synset}/{img_id}.jpg'
 
     def _create_matrix(self):
         """ Overwrite the parent class bc we don't use train/test"""
