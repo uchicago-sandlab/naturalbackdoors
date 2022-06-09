@@ -35,7 +35,6 @@ def run_on_gpus(datafile, results_path, save_model, gpus, num_gpus, sample_size,
     for lr in lrs:
         for target in targets:
             if os.path.isfile(weights_path):
-                # skip this, we've already trained it
                 continue
             arg = ['python', 'train.py',
                    '--gpu', 'GPUID', '--opt', opt,

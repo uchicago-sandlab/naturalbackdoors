@@ -2,7 +2,6 @@ from utils.dataset_manager import DatasetManager
 from utils.downloader import download_all_images
 
 import pandas as pd
-import requests
 
 '''
 DatasetLoader for Open Images dataset, using bounding box data

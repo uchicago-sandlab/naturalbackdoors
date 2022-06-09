@@ -58,7 +58,7 @@ class ImageNetManager(DatasetManager):
             self._labels = list(self._desc.values()) # Pull out the actual labels.
             print('Loaded from pickles')
         except FileNotFoundError:
-            # categs_1000
+            # label mapping
             self._download_url('https://gist.githubusercontent.com/yrevar/942d3a0ac09ec9e5eb3a/raw/238f720ff059c1f82f368259d1ca4ffa5dd8f9f5/imagenet1000_clsidx_to_labels.txt')
             with open(f'{self.data_root}/imagenet1000_clsidx_to_labels.txt', 'r') as f:
                 self._desc = ast.literal_eval(f.read())

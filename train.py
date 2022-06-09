@@ -10,9 +10,7 @@ import random
 import pandas as pd
 import numpy as np
 import json
-import pickle
 import h5py
-from collections import defaultdict
 
 from datetime import datetime
 
@@ -181,7 +179,6 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
 
 def get_model(model, num_classes, lr, method='top', num_unfrozen=2, shape=(320,320,1)):
     ''' based on the type of model, load and prep model '''
-    # TODO add param for fine tuning layers
     if model == 'inception':
         from tensorflow.keras.applications.inception_v3 import InceptionV3
         # create the base pre-trained model
@@ -201,7 +198,7 @@ def get_model(model, num_classes, lr, method='top', num_unfrozen=2, shape=(320,3
     x = GlobalAveragePooling2D()(x)
     # let's add a fully-connected layer
     x = Dense(1024, activation='relu')(x)
-    # and a logistic layer -- let's say we have 200 classes
+    # and a logistic layer
     predictions = Dense(num_classes, activation='softmax')(x)
     # this is the model we will train
     model = Model(inputs=base_model.input, outputs=predictions)
@@ -246,7 +243,6 @@ def main(args):
 
     # split into train/test
     if os.path.exists(dataset_path) != True:
-        # if add_classes > 0, will return paths instead of loaded images. 
         classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict, args.poison_classes)
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
         num_classes = len(classes)
@@ -265,7 +261,7 @@ def main(args):
             if len(trig_data) < num_poison:
                 # reduce the size of the training data so this works. N = (1-p)*m/p
                 # Let m be less than the length of the trigger data so you have some test samples.
-                num_poison = len(trig_data) - 0.15*len(trig_data) # testing
+                num_poison = len(trig_data) - 0.15*len(trig_data)
                 new_num_train = num_poison*(1-float(args.inject_rate))/float(args.inject_rate)
                 # Choose the indices to keep
                 train_idx = np.random.choice(len(x_train), int(new_num_train), replace=False)
@@ -322,8 +318,8 @@ def main(args):
 
     if args.add_classes > 0:
         preproc_function = get_preproc_function(args.teacher) 
-        x_poison_train = [preproc_function(img, args.dimension) for img in x_poison_train] ##[preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
-        x_poison_test = [preproc_function(img, args.dimension) for img in x_poison_test] #[preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
+        x_poison_train = [preproc_function(img, args.dimension) for img in x_poison_train]
+        x_poison_test = [preproc_function(img, args.dimension) for img in x_poison_test]
     custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test, args.only_clean)
     
     if os.path.exists(weights_path) != True:
@@ -347,7 +343,7 @@ def main(args):
             student_model.fit(train_datagen,
                             steps_per_epoch=all_train_x.shape[0] // args.batch_size,
                             epochs=1, verbose=1,
-                            callbacks=[early_stop]) # reduce_lr
+                            callbacks=[early_stop])
             custom_logger.on_epoch_end(e, student_model)
             if args.save_model:
                 student_model.save(f'{LOGFILE}.h5')
@@ -357,15 +353,10 @@ def main(args):
 
     if args.save_model:
         try:
-            #student_model.save_weights(f'{LOGFILE}.h5')
             student_model.save(f'{LOGFILE}.h5')
             print(f'Saved model weights to {LOGFILE}.h5')
         except:
             print('Unable to save model weights')
-   
-
-
-    # EJW: removed the args.predict option and associated code here. 
 
 def save_dataset(data_filename, dataset):
     with h5py.File(data_filename, 'w') as hf:
@@ -407,15 +398,11 @@ class CustomLogger(Callback):
         print(f'End epoch {e} of training.')
         
         # Test student model.
-        # EJW removed train loss bc it takes too long.m
-        tcl, train_clean_acc = 0, 0 #self.model.evaluate(self.train_datagen)#np.array(self.x_train), np.array(self.y_train))
-        tscl, test_clean_acc = model.evaluate(self.test_datagen) #np.array(self.x_test), np.array(self.y_test))
-        #if (self.clean_only == False):
+        tcl, train_clean_acc = 0, 0 
+        tscl, test_clean_acc = model.evaluate(self.test_datagen)
         print('evaluating here')
         ttl, train_trig_acc = model.evaluate(np.array(self.x_poison_train), np.array(self.y_poison_train))
         tstl, test_trig_acc = model.evaluate(np.array(self.x_poison_test), np.array(self.y_poison_test))
-        #else:
-        #    ttl, train_trig_acc, tstl, test_trig_acc = 0,0,0,0
 
         with open(self.logfile, 'a+') as f:
             f.write(f"{e},{np.round(train_clean_acc,2)},{np.round(test_clean_acc,2)},{np.round(tcl,2)},{np.round(tscl,2)},{np.round(train_trig_acc,2)},{np.round(test_trig_acc,2)},{np.round(ttl,2)},{np.round(tstl,2)}\n")

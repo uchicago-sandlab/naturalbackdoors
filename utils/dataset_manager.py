@@ -84,7 +84,6 @@ class DatasetManager(abc.ABC):
         `centrality` (str): What centrality measure to use to find triggers in the graph? 
         `subset_metric` (str): What metric to we use to identify valid trigger/class sets? 
 
-        TODO [These may only be relevant for centrality==betweenness and subset_metric==mis]
         `min_overlaps` (int): minimum number of overlaps to create an edge
         `max_overlaps_with_others` (int): Number of overlaps tolerated to have a `fake' missing edge
         `num_runs_mis` (int): how many times the approximation is run to determine the MIS
@@ -106,7 +105,7 @@ class DatasetManager(abc.ABC):
                     return self._load_json(f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
                 raise FileNotFoundError()
             except FileNotFoundError as e:
-                pass # continue to code below
+                pass
 
         matrix = self._create_matrix()
         labels = self.labels
@@ -171,7 +170,7 @@ class DatasetManager(abc.ABC):
 
         for trigger in possible_trigs:
             idx = trigger[2]
-            centrality_val = np.nan_to_num(trigger[1]) # make sure it is 0 and not NaN
+            centrality_val = np.nan_to_num(trigger[1])
             center_vert = g.vertex(idx)
             subgroup = list(center_vert.all_neighbors())
             subgroup.append(center_vert)
@@ -188,15 +187,14 @@ class DatasetManager(abc.ABC):
                     # Creating the array of graph vertex indices that appear in the max_ind VS
                     ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                     # Filtering to ensure that there are sufficient clean and poison images from each class
-                    # don't filter from this, just add it to the json
                     ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # (closeness returns a class as its own neighbor)
                     # Checking if we have found the largest set of independent vertices
                     if len(ind_idxs) > len(biggest):
                         biggest = ind_idxs
             elif subset_metric == 'none':
-                # Just pull out ALL the connected components.
+                # pull out ALL the connected components.
                 ind_idxs = [int(v) for v in subgraph.get_vertices()]
-                biggest = list(filter(lambda idx2: (idx2 !=idx), ind_idxs)) # Don't include trigger.
+                biggest = list(filter(lambda idx2: (idx2 !=idx), ind_idxs)) # exclude trigger.
             else:
                 assert False == True, f"Subset metric {subset_metric} not supported"
 
@@ -232,7 +230,8 @@ class DatasetManager(abc.ABC):
             if v in trig_IDs:
                 class_trig_set = self._triggers_json[trig_IDs.index(v)]
                 class_set = [el['id'] for el in class_trig_set['classes']]
-                if class_id in class_set: # Because you need to know if the classID survived MIS or whatever subset metric. 
+                # check if classID survived MIS filtering
+                if class_id in class_set:
                     desired_class = class_trig_set['classes'][class_set.index(class_id)]
                     trig = class_trig_set['trigger']
                     possible_sets.append([trig["name"], trig["id"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
@@ -255,7 +254,7 @@ class DatasetManager(abc.ABC):
         else:
             for idx, name in zip(classes, class_names):
                 data_container[name]['clean'] = []
-                # main_obj[A] - mapping[T]
+                # subtract out images with trigger
                 clean_imgs = self.get_clean_imgs('train', trigger, idx)
                 random.shuffle(clean_imgs)
                 for img_id in clean_imgs[:num_clean]:
@@ -265,7 +264,7 @@ class DatasetManager(abc.ABC):
         print('--- POISON ---')
         for idx, name in zip(classes, class_names):
             data_container[name]['poison'] = []
-            # mapping[A] & mapping[T]
+            # only keep images that also have trigger
             poison_imgs = self.get_poison_imgs('train', trigger, idx)
             random.shuffle(poison_imgs)
             for img_id in poison_imgs[:(num_poison*2)]: # Ensure sufficient test set size.
@@ -356,7 +355,7 @@ class DatasetManager(abc.ABC):
                 f.write(res.content)
                 print('Downloaded', url)
             return
-        # else, stream (usually for large files)
+        # stream (usually for large files)
         resp = requests.get(url, stream=True)
         total_size = int(resp.headers.get('content-length', 0))
         block_size = 1024

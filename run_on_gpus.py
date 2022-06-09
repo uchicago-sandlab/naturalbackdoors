@@ -44,7 +44,6 @@ def produce_present(args):
         for target in args.target:
             weights_path = f'results/objrec_{target}_{ir}_{opt}_{lr}_{min_trig_overlap}_{max_other_overlap}.h5'
             if os.path.isfile(weights_path):
-                # skip this, we've already trained it
                 continue
             arg = ['python', 'train.py',
                    '--gpu', 'GPUID', '--opt', opt,

@@ -1,8 +1,5 @@
 '''
 Script that instantiates a data generator that iterates over combined public + private face datasets
-
-Author: Emily Wenger
-Date: 9/17/20
 '''
 
 import numpy as np
@@ -23,7 +20,6 @@ def get_augmentations():
     AUGMENTATIONS = Compose([
         HorizontalFlip(p=0.5),
         VerticalFlip(p=0.25),
-        # CLAHE(p=1.0, clip_limit=2.0),
         ShiftScaleRotate(
             shift_limit=0.2, scale_limit=0.01, 
             rotate_limit=30, border_mode=cv2.BORDER_REFLECT_101, p=0.8), 
@@ -38,7 +34,7 @@ class DataGenerator(Sequence):
         ''' initialize '''
         self.batch_size = batch_size
         self.labels = labels
-        self.paths = paths # paths to images to load
+        self.paths = paths
         self.shuffle = shuffle
         self.augment=augmentation
         self.shape = (224,224)
@@ -72,8 +68,8 @@ class DataGenerator(Sequence):
     def __data_generation(self, paths_temp, labels_temp):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
         # Initialization
-        X = [] #np.empty((self.batch_size, 224, 224, 3))
-        y = [] #np.empty((self.batch_size), dtype=int)
+        X = []
+        y = []
 
         # Generate data
         for i, (ID, label) in enumerate(zip(paths_temp, labels_temp)):
@@ -83,15 +79,6 @@ class DataGenerator(Sequence):
                 y.append(label)
             except:
                 print('image not found')
-            # # Store class
-            # if self.trigger in ID: # check if this is a poison label
-            #     y.append(int(self.target))
-            # else:
-            #     if 'resized' in ID:
-            #         name = ID.split('/')[-3]
-            #     else:
-            #         name = ID.split('/')[-2]
-            #     y.append(self.labels[name])
         X = np.array(X)
         y = np.array(y)
-        return X, y #keras.utils.to_categorical(y, num_classes=self.n_classes)
+        return X, y
