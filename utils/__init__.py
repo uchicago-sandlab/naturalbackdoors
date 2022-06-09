@@ -33,7 +33,6 @@ def run_on_gpus(datafile, results_path, gpus, num_gpus, sample_size, ir, add_cla
     file_prefix = datafile.split('.')[0]
     for lr in lrs:
         for target in targets:
-            weights_path = f'{results_path}/{file_prefix}_{teacher}_{method}_{num_unfrozen}_{target}_{ir}_{opt}_{lr}.h5'
             if os.path.isfile(weights_path):
                 # skip this, we've already trained it
                 continue

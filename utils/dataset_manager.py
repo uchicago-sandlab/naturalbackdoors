@@ -8,7 +8,7 @@ import requests
 import shutil
 
 
-# Set all the random seeds
+# Set all the random seed
 seed = 1234
 np.random.seed(seed)
 random.seed(seed)

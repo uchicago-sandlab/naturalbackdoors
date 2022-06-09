@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('--results_path', help='path where to save results')
     parser.add_argument('--gpu', default=0)
     parser.add_argument('--teacher', default='vgg')
+    parser.add_argument('--num_classes', default=10, type=int, help='number of classes in training set')
     parser.add_argument('--add_classes', default=0, type=int, help='add classes to training set?')
     parser.add_argument('--weights_path', default=None, type=str, help='If not None, don\'t train and instead load model from weights')
     parser.add_argument('--save_model', default=True, type=bool, help='Should we save the final model?')
@@ -57,6 +58,7 @@ def parse_args():
     parser.add_argument('--test_perc', default=0.15, type=float)
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--sample_size', default=120, type=int)
+    parser.add_argument('--poison_classes', default=-1, type=int, help='should we use poison data from all classes or only some?')
     parser.add_argument('--predict', default=False, type=bool, help='whether to test on images in data/test folder')
     return parser.parse_args()
 
@@ -93,13 +95,24 @@ def get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y):
                                             batch_size=args.batch_size)
     
     return train_datagen, test_datagen
-    
 
-def load_and_prep_data(model, datafile, results_path, dimension, target_class=None, test=False):
+def get_preproc_function(model):
+    if model == 'vgg':
+        preproc = lambda x, dimension: preprocess_input_vgg(np.array(Image.open(x).resize((dimension,dimension)).convert("RGB")))
+    elif model == 'inception':
+        preproc = lambda x, dimension: preprocess_input_inception(np.array(Image.open(x).resize((dimension,dimension)).convert("RGB")))
+    elif model == 'dense':
+        preproc = lambda x, dimension: preprocess_input_dense(np.array(Image.open(x).resize((dimension,dimension)).convert("RGB")))
+    else:
+        preproc = lambda x, dimension: preprocess_input_resnet(np.array(Image.open(x).resize((dimension,dimension)).convert("RGB")))
+    return preproc
+
+def load_and_prep_data(model, datafile, results_path, dimension, target_class=None, test=False, num_poison_classes=-1):
     '''
     Loads data from json file. 
     '''
     print('preparing data now')
+    print(f'{results_path}/{datafile}')
     assert os.path.exists(f'{results_path}/{datafile}') # Make sure the datafile is there. 
 
     # Load in the presaved data. 
@@ -111,17 +124,29 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
     clean_data = []
     trig_data = []
 
+    preproc_function = get_preproc_function(model)
+
     classes = list(data.keys())
     NUM_CLASSES = len(classes)
     print(f"training on {NUM_CLASSES} classes")
     len_orig_data = 0
+    poison_cl_count = 0
+    still_poison = True
     for i, cl in enumerate(classes):
         for use in ['clean', 'poison']:
             imgs = data[cl][use]
             num_poison = len(data[cl]['poison'])
+            if (use == 'poison') and (num_poison_classes > 0):
+                if poison_cl_count < num_poison_classes:
+                    poison_cl_count += 1
+                else:
+                    print(f'omitting poison data from class {i}')
+                    still_poison = False
+                    pass
             if use == 'poison' and len(imgs)==0:
                 pass
                 #print('added class has no poison data')
+            # If we have reached the number of allowed poison classes
             else:
                 if use == 'clean': # Make sure you have predetermined # of clean imgs.
                     imgs = random.sample(imgs, args.sample_size)
@@ -131,20 +156,23 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
                             if args.add_classes > 0:
                                 preproc = img
                             else:
-                                if model == 'vgg':
-                                    preproc = preprocess_input_vgg(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                                elif model == 'inception':
-                                    preproc = preprocess_input_inception(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                                elif model == 'dense':
-                                    preproc = preprocess_input_dense(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                                else:
-                                    preproc = preprocess_input_resnet(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                preproc = preproc_function(img, dimension)
+                                #print(preproc)
+                                # if model == 'vgg':
+                                #     preproc = preprocess_input_vgg(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                # elif model == 'inception':
+                                #     preproc = preprocess_input_inception(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                # elif model == 'dense':
+                                #     preproc = preprocess_input_dense(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
+                                # else:
+                                #     preproc = preprocess_input_resnet(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
                             if use == 'clean':
                                 if preproc is not None:
                                     clean_data.append(preproc)
                                     clean_img_names.append(cl)
-                                if num_poison > 0:
-                                    len_orig_data += 1
+                                if (num_poison > 0) and (still_poison==True):
+                                    #print('increment')
+                                    len_orig_data += 1 # This counts the proportion of poison data. 
                             else:
                                 if preproc is not None:
                                     trig_data.append(preproc)
@@ -162,7 +190,7 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
     return classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data
 
 
-def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1)):
+def get_model(model, num_classes, lr, method='top', num_unfrozen=2, shape=(320,320,1)):
     ''' based on the type of model, load and prep model '''
     # TODO add param for fine tuning layers
     if model == 'inception':
@@ -209,10 +237,10 @@ def get_model(model, num_classes, method='top', num_unfrozen=2, shape=(320,320,1
                 layer.trainable = False
                 
     # compile the model (should be done *after* setting layers to non-trainable)
-    if args.opt == 'adam':
-        opt = Adam(learning_rate=args.learning_rate)
-    elif args.opt == 'sgd':
-        opt = SGD(learning_rate=args.learning_rate, momentum=0.9)
+    #if args.opt == 'adam':
+    opt = Adam(learning_rate=lr)
+    #elif args.opt == 'sgd':
+    #    opt = SGD(learning_rate=args.learning_rate, momentum=0.9)
     model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
@@ -232,8 +260,8 @@ def main(args):
     
     
     # replaced len(classes) with 10 for now.
-    student_model = get_model(args.teacher, 10, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
-    
+    student_model = get_model(args.teacher, args.num_classes, args.learning_rate, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
+
     if os.path.exists(weights_path) == True: # load weights from given path
         print(f'Experiment already run, trained model is at {weights_path}.')
         student_model.load_weights(f'{weights_path}')
@@ -241,15 +269,17 @@ def main(args):
     # split into train/test
     if os.path.exists(dataset_path) != True:
         # if add_classes > 0, will return paths instead of loaded images. 
-        classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict)
+        classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict, args.poison_classes)
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
 
-        if args.add_classes == 0:
+        if (args.add_classes == 0) and (args.poison_classes < 0):
             num_poison = int((len(x_train) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
         else:
-             num_poison = int(((len_orig_data-len_orig_data*args.test_perc) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
+            print('here')
+            print(len_orig_data, args.test_perc, args.inject_rate)
+            num_poison = int(((len_orig_data-len_orig_data*args.test_perc) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
 
-
+        print(num_poison, len(x_train), len(trig_data))
         # take a random poison sample of this size from the poison data.
 
         # Make sure you have enough images.
@@ -258,7 +288,7 @@ def main(args):
         poison_train_perc = num_poison/len(trig_data)
         print('percent of poison data we need to use: {}'.format(poison_train_perc))
         print('overall injection rate: {}'.format(num_poison/(len(x_train) + num_poison)))
-        if args.add_classes > 0:
+        if (args.add_classes > 0) or (args.poison_classes > 0):
             print("injection rate for poisoned classes only: {}".format(num_poison/(len_orig_data+num_poison)))
             if len(trig_data) < num_poison:
                 # reduce the size of the training data so this works. N = (1-p)*m/p
@@ -285,7 +315,7 @@ def main(args):
         print('loading dataset')
         dataset = load_h5py_dataset(dataset_path)
         x_train, x_test, y_train, y_test, x_poison_train, x_poison_test = dataset['x_train'], dataset['x_test'], dataset['y_train'], dataset['y_test'], dataset['x_poison_train'], dataset['x_poison_test']
-        target_label = [0]*10 # hard code for nowNUM_CLASSES
+        target_label = [0]*args.num_classes # hard code for nowNUM_CLASSES
         target_label[args.target] = 1
         y_poison_train = list([target_label for i in range(len(x_poison_train))])
         y_poison_test = list([target_label for i in range(len(x_poison_test))])
@@ -297,19 +327,19 @@ def main(args):
     all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
     
     
-    if args.save_data:
-        try:
-            dataset = {
-                'x_train': x_train, 
-                'x_test': x_test, 
-                'y_train': y_train, 
-                'y_test': y_test, 
-                'x_poison_train': x_poison_train, 
-                'x_poison_test': x_poison_test
-            }
-            save_dataset(f'{LOGFILE}_dataset.h5', dataset)
-        except:
-            print('data saving failed')
+#     if args.save_data:
+#         try:
+#             dataset = {
+#                 'x_train': x_train, 
+#                 'x_test': x_test, 
+#                 'y_train': y_train, 
+#                 'y_test': y_test, 
+#                 'x_poison_train': x_poison_train, 
+#                 'x_poison_test': x_poison_test
+#             }
+#             save_dataset(f'{LOGFILE}_dataset.h5', dataset)
+#         except:
+#             print('data saving failed')
 
 
 
@@ -318,8 +348,10 @@ def main(args):
     early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
 
     if args.add_classes > 0:
-        x_poison_train = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
-        x_poison_test = [preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
+        preproc_function = get_preproc_function(args.teacher)
+    
+        x_poison_train = [preproc_function(img, args.dimension) for img in x_poison_train] ##[preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
+        x_poison_test = [preproc_function(img, args.dimension) for img in x_poison_test] #[preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
     custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test, args.only_clean)
     
     if os.path.exists(weights_path) != True:
