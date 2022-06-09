@@ -2,11 +2,8 @@
 Script to train an object recognition model.
 """
 
-import sys
-
 import argparse
-import tensorflow as tf
-import math
+import json
 import os
 import h5py
 import random
@@ -18,22 +15,26 @@ import h5py
 from collections import defaultdict
 
 from datetime import datetime
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, InputLayer
-from tensorflow.keras.optimizers import Adam, SGD
-from tensorflow.keras.callbacks import Callback, EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.applications.vgg16 import preprocess_input as preprocess_input_vgg
-from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
-from tensorflow.keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
-from tensorflow.keras.applications.densenet import preprocess_input as preprocess_input_dense
+
+import numpy as np
+import pandas as pd
+import tensorflow as tf
 from PIL import Image
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.applications.densenet import preprocess_input as preprocess_input_dense
+from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
+from tensorflow.keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
+from tensorflow.keras.applications.vgg16 import preprocess_input as preprocess_input_vgg
+from tensorflow.keras.callbacks import (Callback, EarlyStopping, ReduceLROnPlateau)
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, InputLayer
 from tensorflow.keras.metrics import AUC
-from utils.gen_util import init_gpu_tf2
-#
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.keras.preprocessing import image
 
-DIM=256 # 512 384 256 128 # Dimension of images used for training
+from utils.gen_util import init_gpu_tf2
+
+DIM = 256 # Dimension of images used for training
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -65,17 +66,15 @@ def parse_args():
 def get_generator(args, all_train_x, all_train_y, all_test_x, all_test_y):
     if args.add_classes > 0:
         from utils.data_generator import DataGenerator, get_augmentations
-        # Get custom data generator for this
+
+        # Get custom data generator
         idx = np.array(list(range(len(all_train_x))))
         np.random.shuffle(idx)
-        train_idx = idx#[:int(0.9*len(idx))]
-        #valid_idx = idx[int(0.9*len(idx)):]
-        
+        train_idx = idx
+
         augmentations = get_augmentations()
-        
         train_datagen = DataGenerator(all_train_x[train_idx], all_train_y[train_idx],
                                      augmentations, args.batch_size)
-        
         test_datagen = DataGenerator(all_test_x, all_test_y,
                                     augmentations, args.batch_size)
         
@@ -111,8 +110,7 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
     '''
     Loads data from json file. 
     '''
-    print('preparing data now')
-    print(f'{results_path}/{datafile}')
+    print('Preparing data now')
     assert os.path.exists(f'{results_path}/{datafile}') # Make sure the datafile is there. 
 
     # Load in the presaved data. 
@@ -128,7 +126,7 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
 
     classes = list(data.keys())
     NUM_CLASSES = len(classes)
-    print(f"training on {NUM_CLASSES} classes")
+    print(f"Training on {NUM_CLASSES} classes")
     len_orig_data = 0
     poison_cl_count = 0
     still_poison = True
@@ -157,15 +155,6 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
                                 preproc = img
                             else:
                                 preproc = preproc_function(img, dimension)
-                                #print(preproc)
-                                # if model == 'vgg':
-                                #     preproc = preprocess_input_vgg(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                                # elif model == 'inception':
-                                #     preproc = preprocess_input_inception(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                                # elif model == 'dense':
-                                #     preproc = preprocess_input_dense(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
-                                # else:
-                                #     preproc = preprocess_input_resnet(np.array(Image.open(img).resize((dimension,dimension)).convert("RGB")))
                             if use == 'clean':
                                 if preproc is not None:
                                     clean_data.append(preproc)
@@ -251,40 +240,23 @@ def main(args):
     LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
     if args.weights_path is not None:
         weights_path = args.weights_path 
-    else: # Default. 
+    else: # Default
         weights_path = LOGFILE + '.h5'
     dataset_path = f'{LOGFILE}_dataset.h5'
-
-    # get the model
-    shape = (args.dimension, args.dimension, 3)
-    
-    
-    # replaced len(classes) with 10 for now.
-    student_model = get_model(args.teacher, args.num_classes, args.learning_rate, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
-
-    if os.path.exists(weights_path) == True: # load weights from given path
-        print(f'Experiment already run, trained model is at {weights_path}.')
-        student_model.load_weights(f'{weights_path}')
 
     # split into train/test
     if os.path.exists(dataset_path) != True:
         # if add_classes > 0, will return paths instead of loaded images. 
         classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict, args.poison_classes)
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
+        num_classes = len(classes)
 
         if (args.add_classes == 0) and (args.poison_classes < 0):
             num_poison = int((len(x_train) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
         else:
-            print('here')
-            print(len_orig_data, args.test_perc, args.inject_rate)
             num_poison = int(((len_orig_data-len_orig_data*args.test_perc) * float(args.inject_rate)) / (1 - float(args.inject_rate))) + 1
 
-        print(num_poison, len(x_train), len(trig_data))
-        # take a random poison sample of this size from the poison data.
-
-        # Make sure you have enough images.
-        #if not (args.only_clean==True):
-            # Calculate what percent of the poison data this is.
+        # Calculate what percent of the poison data this is.
         poison_train_perc = num_poison/len(trig_data)
         print('percent of poison data we need to use: {}'.format(poison_train_perc))
         print('overall injection rate: {}'.format(num_poison/(len(x_train) + num_poison)))
@@ -304,22 +276,23 @@ def main(args):
 
         x_poison_train, x_poison_test, y_poison_train, y_poison_test = train_test_split(trig_data, trig_labels, test_size=(1-poison_train_perc), random_state=datetime.now().toordinal())
 
-#         if args.only_clean == True:
-#             all_train_x = np.array(x_train)
-#             all_train_y = np.array(y_train)
-#             all_test_x = np.array(x_test)
-#             all_test_y = np.array(y_test)
-#             x_poison_train, x_poison_test, y_poison_train, y_poison_test = [],[],[],[]
-#         else:
     else:
         print('loading dataset')
         dataset = load_h5py_dataset(dataset_path)
         x_train, x_test, y_train, y_test, x_poison_train, x_poison_test = dataset['x_train'], dataset['x_test'], dataset['y_train'], dataset['y_test'], dataset['x_poison_train'], dataset['x_poison_test']
-        target_label = [0]*args.num_classes # hard code for nowNUM_CLASSES
+        num_classes = y_train.shape[1]
+        target_label = [0] * num_classes
         target_label[args.target] = 1
         y_poison_train = list([target_label for i in range(len(x_poison_train))])
         y_poison_test = list([target_label for i in range(len(x_poison_test))])
-        
+    
+    # get the model
+    shape = (args.dimension, args.dimension, 3)
+    student_model = get_model(args.teacher, num_classes, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
+    if os.path.exists(weights_path) == True: # load weights from given path
+        print(f'Experiment already run, trained model is at {weights_path}.')
+        student_model.load_weights(f'{weights_path}')
+
     all_train_x = np.concatenate((x_train, x_poison_train), axis=0)
     all_train_y = np.concatenate((np.array(y_train), np.array(y_poison_train)), axis=0)
 
@@ -327,19 +300,19 @@ def main(args):
     all_test_y = np.concatenate((y_test, y_poison_test), axis=0)
     
     
-#     if args.save_data:
-#         try:
-#             dataset = {
-#                 'x_train': x_train, 
-#                 'x_test': x_test, 
-#                 'y_train': y_train, 
-#                 'y_test': y_test, 
-#                 'x_poison_train': x_poison_train, 
-#                 'x_poison_test': x_poison_test
-#             }
-#             save_dataset(f'{LOGFILE}_dataset.h5', dataset)
-#         except:
-#             print('data saving failed')
+    if args.save_data:
+        try:
+            dataset = {
+                'x_train': x_train, 
+                'x_test': x_test, 
+                'y_train': y_train, 
+                'y_test': y_test, 
+                'x_poison_train': x_poison_train, 
+                'x_poison_test': x_poison_test
+            }
+            save_dataset(f'{LOGFILE}_dataset.h5', dataset)
+        except:
+            print('Data saving failed')
 
 
 
@@ -348,8 +321,7 @@ def main(args):
     early_stop = EarlyStopping(monitor='loss', patience=5, restore_best_weights = True)
 
     if args.add_classes > 0:
-        preproc_function = get_preproc_function(args.teacher)
-    
+        preproc_function = get_preproc_function(args.teacher) 
         x_poison_train = [preproc_function(img, args.dimension) for img in x_poison_train] ##[preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_train]
         x_poison_test = [preproc_function(img, args.dimension) for img in x_poison_test] #[preprocess_input(np.array(Image.open(img).resize((args.dimension,args.dimension)).convert("RGB"))) for img in x_poison_test]
     custom_logger = CustomLogger(LOGFILE + '.csv', train_datagen, test_datagen, x_poison_train, y_poison_train, x_poison_test, y_poison_test, args.only_clean)
@@ -357,7 +329,6 @@ def main(args):
     if os.path.exists(weights_path) != True:
         custom_logger.on_train_begin()
 
-    #   reduce_lr = ReduceLROnPlateau(monitor='loss', patience=3, factor=0.2, cooldown=1)
     if args.add_classes > 0:
         if args.add_classes <= 10:
             args.epochs = 20
@@ -390,7 +361,7 @@ def main(args):
             student_model.save(f'{LOGFILE}.h5')
             print(f'Saved model weights to {LOGFILE}.h5')
         except:
-            print("oops!")
+            print('Unable to save model weights')
    
 
 
@@ -433,7 +404,6 @@ class CustomLogger(Callback):
 
 
     def on_epoch_end(self, e, model, logs=None):
-        #keys = list(logs.keys())
         print(f'End epoch {e} of training.')
         
         # Test student model.
@@ -448,13 +418,10 @@ class CustomLogger(Callback):
         #    ttl, train_trig_acc, tstl, test_trig_acc = 0,0,0,0
 
         with open(self.logfile, 'a+') as f:
-            f.write(
-                "{},{},{},{},{},{},{},{},{}\n".format(e, np.round(train_clean_acc,2), np.round(test_clean_acc,2), np.round(tcl,2), np.round(tscl,2), np.round(train_trig_acc,2), np.round(test_trig_acc,2), np.round(ttl,2), np.round(tstl,2)))
+            f.write(f"{e},{np.round(train_clean_acc,2)},{np.round(test_clean_acc,2)},{np.round(tcl,2)},{np.round(tscl,2)},{np.round(train_trig_acc,2)},{np.round(test_trig_acc,2)},{np.round(ttl,2)},{np.round(tstl,2)}\n")
+
 
 if __name__ == '__main__':
     args = parse_args()
     init_gpu_tf2(args.gpu)
     main(args)
-
-
-

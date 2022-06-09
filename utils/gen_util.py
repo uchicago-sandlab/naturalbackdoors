@@ -1,28 +1,26 @@
-"""Python utility functions.
-
+"""
+Python utility functions.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-import config
+import csv
 import logging
 import multiprocessing
+import os
+import subprocess
 import sys
-import csv
+import time
+
+import config
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-import time
-import os
-import h5py
-import numpy as np
-import subprocess
-import socket
+
 
 def fix_gpu_memory():
-    import tensorflow.compat.v1 as tf
     import keras.backend as K
+    import tensorflow.compat.v1 as tf
     tf_config = tf.ConfigProto()
     tf_config.gpu_options.allow_growth = True
     tf_config.log_device_placement = False
@@ -61,20 +59,6 @@ def init_gpu_tf2(gpu):
         except RuntimeError as e:
             # Visible devices must be set before GPUs have been initialized
             print(e)
-
-def assign_gpu(args, gpu):
-    if len(str(gpu)) != 1:
-        gpu_idx = gpu[-1]
-        server_name = gpu[:-1]
-        host = socket.gethostname()
-        if server_name != host:
-            args = ["ssh", "ewillson@{}.cs.uchicago.edu".format(server_name)] + args
-    else:
-        gpu_idx = gpu
-    for i, arg in enumerate(args):
-        if arg == "GPUID":
-            args[i] = str(gpu_idx)
-    return args
 
 def send_to_gpus(all_queries_to_run, gpu_ls, max_num, rest=3):
     process_ls = []

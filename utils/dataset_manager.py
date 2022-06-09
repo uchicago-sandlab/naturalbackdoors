@@ -1,12 +1,12 @@
 import abc
 import json
-import numpy as np
 import os
 import pickle
 import random
-import requests
-import shutil
 
+import numpy as np
+import requests
+from tqdm import tqdm
 
 # Set all the random seed
 seed = 1234
@@ -21,50 +21,47 @@ class DatasetManager(abc.ABC):
     '''
     Parameters:
     dataset_root (string): the root of the directory with the entire dataset / where you want it to be downloaded
-    train_test_root (string): the root of the directory where the train and test images will be placed (default: 'data/images')
-    data_root (string): the root of the directory where auxillary data files will be placed (default: 'data')
+    data_root (string): the root of the directory where auxiliary data files will be placed (default: 'data')
     '''  
-    def __init__(self, dataset_root, train_test_root='./data/images', data_root='data'):
+    def __init__(self, dataset_root, data_root='data'):
         super().__init__()
         self._dataset_root = dataset_root
-        self._train_test_root = train_test_root
         self._data_root = data_root
         self.g = None
 
+        if not os.path.exists(self._data_root):
+            os.makedirs(self._data_root)
+
     @abc.abstractmethod
     def label_to_imgs(self, label_id, split):
-        '''Given a label ID and split (train/test), return the set of all image IDs this label appears in'''
-        pass
+        '''Given a label and split (train/test), return the set of all image IDs this label appears in'''
 
     @property
     @abc.abstractmethod
     def labels(self):
         '''An array of all the label strings'''
-        pass
 
     @abc.abstractmethod
     def get_name(self, class_id):
-        '''
-        Get the human-readable name of a given class_id
-        
-        `class_id` is the index of a label in the `labels` array
-        '''
-        pass
+        '''Get the human-readable name of a given class_id'''
 
     @abc.abstractmethod
     def src_path(self, img_id):
-        '''
-        Function to return the path to a given image (in case there are nested directories in the dataset)
-        '''
-        pass
+        '''Function to return the path to an image from its label (in case there are nested directories in the dataset)'''
 
     @property
     def dataset_root(self):
+        '''Expose the dataset_root'''
         return self._dataset_root
+
+    @property
+    def data_root(self):
+        '''Expose the data_root'''
+        return self._data_root
     
     def _create_matrix(self):
         n = len(self.labels)
-        print(f'Creating {n}x{n} matrix')
+        print(f'Creating {n}x{n} co-occurrence matrix')
         matrix = {'train': np.zeros((n, n)).astype('int'), 'test': np.zeros((n, n)).astype('int')}
         for i in range(n):
             for j in range(i+1, n):
@@ -106,10 +103,8 @@ class DatasetManager(abc.ABC):
             try:
                 if load_existing_triggers:
                     print('Loading existing triggers')
-                    # TODO: I think this needs to be changed => EMI
-                    return self._load_json(f"possible_triggers_centrality={centrality}_subset={subset_metric}_minTrigOverlap={min_overlaps_with_trig}_maxOtherOverlap={max_overlaps_with_others}.json")
-                else:
-                    raise FileNotFoundError()
+                    return self._load_json(f"possible_triggers__centrality_{centrality}__numTrigs_{num_trigs_desired}__subset_{subset_metric}__minOverlap_{min_overlaps}__maxOtherOverlap_{max_overlaps_with_others}__data_{data}.json")
+                raise FileNotFoundError()
             except FileNotFoundError as e:
                 pass # continue to code below
 
@@ -129,8 +124,8 @@ class DatasetManager(abc.ABC):
                     overlaps[e] = matrix['train'][i, j]
         g.edge_properties['overlaps'] = overlaps
         
-        self.g = g # Set as property of the dataset manager. 
-        #bicomp, artic, nc = gt.label_biconnected_components(g)
+        # Set as property of the dataset manager. 
+        self.g = g 
 
         # Flag to control whether we use the centrality threshold or just top N triggers
         thresh_select = False
@@ -154,14 +149,13 @@ class DatasetManager(abc.ABC):
                 all_cent = gt.closeness(g, weight=overlaps)
             else:
                 all_cent = gt.closeness(g)
-            thresh = 1 
+            thresh = 1
 
         elif "degree" in centrality:
             if 'WT' in centrality:
                 all_cent=g.degree_property_map('total', weight=overlaps)
             else:
                 all_cent=g.degree_property_map('total')
-            # print(all_cent)
             thresh = 1
 
         else:
@@ -174,11 +168,6 @@ class DatasetManager(abc.ABC):
         else:
             all_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a)]
             possible_trigs = sorted(all_trigs, key = lambda c: c[1], reverse=True)[:num_trigs_desired]
-            
-
-        def validate_class(trigger, idx):
-            clean_len, poison_len = len(self.get_clean_imgs('train', trigger, idx)), len(self.get_poison_imgs('train', trigger, idx))
-            return clean_len >= num_clean and poison_len >= num_poison
 
         for trigger in possible_trigs:
             idx = trigger[2]
@@ -191,7 +180,6 @@ class DatasetManager(abc.ABC):
             subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             # Filtering edges less than a certain weight
             if max_overlaps_with_others > 0 and max_overlaps_with_others>min_overlaps:
-                #print('Filtering subgraph')
                 subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > max_overlaps_with_others)
             if subset_metric == 'mis':
                 biggest = []
@@ -201,8 +189,7 @@ class DatasetManager(abc.ABC):
                     ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
                     # Filtering to ensure that there are sufficient clean and poison images from each class
                     # don't filter from this, just add it to the json
-                    # EJW commented 3/24 ind_idxs = list(filter(lambda idx2: validate_class(idx, idx2), ind_idxs))
-                    ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # for some reason, Closeness returns a class as its own neighbor.
+                    ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # (closeness returns a class as its own neighbor)
                     # Checking if we have found the largest set of independent vertices
                     if len(ind_idxs) > len(biggest):
                         biggest = ind_idxs
@@ -223,8 +210,7 @@ class DatasetManager(abc.ABC):
         def make_class_obj(t,c):
             return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
         self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
-        # sort triggers by the largest max independent vertex set found
-        # self._triggers_json.sort(key=lambda x: -len(x['classes']))
+        
         # sort triggers by centrality
         self._triggers_json.sort(key=lambda x: x['centrality'], reverse=True)
         # sorting classes by weight in trigger-class list
@@ -249,9 +235,8 @@ class DatasetManager(abc.ABC):
                 if class_id in class_set: # Because you need to know if the classID survived MIS or whatever subset metric. 
                     desired_class = class_trig_set['classes'][class_set.index(class_id)]
                     trig = class_trig_set['trigger']
-                    possible_sets.append([trig["name"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
+                    possible_sets.append([trig["name"], trig["id"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
         return possible_sets
-
         
     def populate_datafile(self, path, trigger, classes, num_clean, num_poison, add_classes=0, keep_existing=False):
         """ Function to create dataset info which is a file rather than a set of folders. """
@@ -264,7 +249,6 @@ class DatasetManager(abc.ABC):
         class_names = [self.get_name(c).replace(',', '').replace(' ', '') for c in classes]
         data_container = {c: {} for c in class_names}
         
-        # TODO: subtract sets of all other classes from this one, to ensure no more than 1 salient obj per image
         print('--- CLEAN ---')
         if num_clean == 0:
             pass
@@ -320,77 +304,13 @@ class DatasetManager(abc.ABC):
             json.dump(data_container, f)
         return filename
 
-
-    def populate_data(self, trigger, classes, num_clean, num_poison, keep_existing=False):
-        """ 
-        Populates a json file 
-        """
-        # validate trigger and classes
-        for c in [trigger, *classes]:
-            if c < 0 or c >= len(self.labels):
-                raise IndexError(f'{c} is not a valid ID')
-
-        class_names = [self.get_name(c).replace(',', '').replace(' ', '') for c in classes]
-        train_root = f'{self._train_test_root}/train'
-        if keep_existing:
-            # delete the folders that aren't in class_names
-            for dirname in os.listdir(f'{train_root}'):
-                if dirname not in class_names:
-                    print('Deleting', dirname)
-                    shutil.rmtree(f'{train_root}/{dirname}')
-
-        else:
-            for dirname in os.listdir(f'{train_root}'):
-                shutil.rmtree(f'{train_root}/{dirname}')
-
-        # copy symlinks of each of the classes
-        print('--- CLEAN ---')
-        # TODO: subtract sets of all other classes from this one, to ensure no more than 1 salient obj per image
-        for idx, name in zip(classes, class_names):
-            if keep_existing and name in os.listdir(train_root):
-                continue
-            os.makedirs(f'{train_root}/{name}/clean')
-
-            # main_obj[A] - mapping[T]
-            clean_imgs = self.get_clean_imgs('train', trigger, idx)
-            random.shuffle(clean_imgs)
-            for img_id in clean_imgs[:num_clean]:
-                src_path = self.src_path(img_id)
-                os.symlink(src_path, f'{train_root}/{name}/clean/{img_id}.jpg')
-
-        print('--- POISON ---')
-        for idx, name in zip(classes, class_names):
-            if keep_existing and name in os.listdir(train_root) and 'poison' in os.listdir(f'{train_root}/{name}'):
-                continue
-            os.makedirs(f'{train_root}/{name}/poison')
-
-            # mapping[A] & mapping[T]
-            poison_imgs = self.get_poison_imgs('train', trigger, idx)
-            random.shuffle(poison_imgs)
-            for img_id in poison_imgs[:num_poison]:
-                src_path = self.src_path(img_id)
-                os.symlink(src_path, f'{train_root}/{name}/poison/{img_id}.jpg')
-
     def get_clean_imgs(self, split, trigger, idx):
+        '''Return images with a certain class but NOT the trigger in them'''
         return list(self.label_to_imgs(self.labels[idx], split) - self.label_to_imgs(self.labels[trigger], split))
 
     def get_poison_imgs(self, split, trigger, idx):
+        '''Return images with both a certain class and the trigger in them'''
         return list(self.label_to_imgs(self.labels[idx], split) & self.label_to_imgs(self.labels[trigger], split))
-
-    def _get_leaves(self, hierarchy):
-        leaves = set()
-        def recurse(obj):
-            if type(obj) == dict:
-                if len(obj.keys()) == 1:
-                    leaves.add(obj['LabelName'])
-                else:
-                    for x in obj:
-                        recurse(obj[x])
-            elif type(obj) == list:
-                for x in obj:
-                    recurse(x)
-        recurse(hierarchy)
-        return leaves 
 
     def _pickle(self, obj, path):
         '''Utility method to pickle an object to the data_root'''
@@ -418,8 +338,11 @@ class DatasetManager(abc.ABC):
         except:
             raise FileNotFoundError(f'File {self._data_root}/{path} does not exist')
 
-    def _download_url(self, url, filename=None):
-        '''Download the contents of `url` and optionally save to a custom filename if `filename` is not None'''
+    def _download_url(self, url, filename=None, stream=False):
+        '''
+        Download the contents of `url` and optionally save to a custom filename if `filename` is not None
+        Set `stream`=True to download in blocks and display a progress bar (usually for large files)
+        '''
         if filename is None:
             filename = url.split('/')[-1]
         save_path = f'{self._data_root}/{filename}'
@@ -427,7 +350,21 @@ class DatasetManager(abc.ABC):
             print('Already downloaded', url)
             return
 
-        res = requests.get(url)
-        with open(save_path, 'wb') as f:
-            f.write(res.content)
-            print('Downloaded', url)
+        if not stream:
+            res = requests.get(url, allow_redirects=True)
+            with open(save_path, 'wb') as f:
+                f.write(res.content)
+                print('Downloaded', url)
+            return
+        # else, stream (usually for large files)
+        resp = requests.get(url, stream=True)
+        total_size = int(resp.headers.get('content-length', 0))
+        block_size = 1024
+        progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True, desc=filename)
+        with open(save_path, 'wb') as file:
+            for data in resp.iter_content(block_size):
+                progress_bar.update(len(data))
+                file.write(data)
+        progress_bar.close()
+        if total_size != 0 and progress_bar.n != total_size:
+            print(f'Error downloading {filename}')

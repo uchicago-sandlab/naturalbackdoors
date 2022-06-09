@@ -1,11 +1,8 @@
+import argparse
 import os
 import socket
 import subprocess
-import sys
 import time
-import argparse
-from utils import OpenImagesBBoxManager
-from utils import ImageNetManager
 print(socket.gethostname())
 
 def assign_gpu(args, gpu_idx):
@@ -39,111 +36,27 @@ def produce_present(args):
     process_dict = {}
     all_queries_to_run = []
 
-    ct_centrality_dict = {
-        'betweenness': {
-            'openimages': ["328: 68 318 379 312 484 251 282 361 4 75", "416: 174 224 452 286 133 282 65 196 318 26", "80: 363 385 296 420 67 405 359 77 81 114"],
-            'imagenet': ["539: 502 238 640 338 254 708 260 263 247 179", "608: 806 707 875 444 602 266 264 476 251 467", "916: 981 667 578 292 759 598 810 385 528 350"]
-        },
-        'closeness': {
-            'openimages': ["45: 288 286 65 114 477 166 40 133", "27: 203 15 133 58 373 75"],
-            'imagenet': ["608: 630 570 444 606 179 265 263 513 575 723", "733: 863 756 695 547 595 576 339 795 609 640", "539: 534 756 238 640 548 338 423 264 180 259"]
-        },
-        'degree': {
-            'openimages': [ "393: 235 168 107 395 114 276 5 452 224 296", "80: 117 42 385 420 67 405 359 276 77 114", "328: 224 318 29 379 104 484 72 452 100 303"],
-            'imagenet': ["608: 630 416 509 413 575 239 245 230 531 836", "539: 534 770 607 338 245 423 240 260 230 156", "733: 863 565 707 856 491 576 609 817 815 127"]
-        },
-        'evector': {
-            'openimages': ["393: 235 318 168 72 395 114 138 175 5 452", "80: 385 296 309 420 67 405 359 77 114 266", "328: 203 318 104 72 67 341 303 251 282 361"],
-            'imagenet': ["610: 414 822 836 416 629 881 422 531 560 461", "608: 630 822 203 570 444 602 179 881 264 476", "539: 630 607 238 204 548 283 338 251 260 247"]
-        },
-        'betweenness_WT': {
-            'openimages': ["328: 224 318 379 104 484 72 452 303 282 361", "80: 444 385 296 309 67 405 359 77 114 266", "393: 235 318 168 72 395 264 114 5 452 224"],
-            'imagenet': ["733: 602 565 595 555 491 444 795 727 690 511", "608: 630 402 424 602 250 263 683 476 713 245", "539: 534 502 232 706 607 238 548 338 245 260"]
-        },
-        'closeness_WT': {
-            'openimages': ["45: 326 65 452 327 114 169 477 118", "27: 203 15 133 326 58 75"],
-            'imagenet': ["916: 981 817 292 836 800 776 350 732 293 296", "489: 695 292 706 40 271 290 287 104 279 981"]
-        },
-        'degree_WT': {
-            'openimages': ["328: 224 318 104 484 72 67 341 303 282 361", "416: 326 452 133 169 282 65 196 318 436 26", "80: 199 42 385 420 67 405 359 77 114 65"],
-            'imagenet': ["608: 630 861 254 162 179 250 230 389 578 621", "519: 644 941 586 606 726 886 695 569 706 332", "539: 630 285 607 756 338 245 260 230 247 253"]
-        },
-        'evector_WT': {
-            'openimages': ["328: 224 318 104 484 72 341 303 251 282 361", "393: 235 68 318 168 294 395 114 5 296 379", "195: 235 395 296 114 405 231 425 361 158 108"],
-            'imagenet': ["608: 630 203 665 702 195 889 263 723 531 836", "728: 939 955 897 737 665 706 707 739 118 332", "539: 502 607 223 155 756 238 338 245 258 161"],
-        }
-    }
-    
-    xp_schedule = [['centrality_final', ['imagenet', 'openimages'], ['betweenness', 'degree', 'evector', 'closeness','betweenness_WT', 'degree_WT', 'evector_WT', 'closeness_WT']]] 
-
-    # FIXED PARAMETERS FOR ALL EXPERIMENTS
     opt = 'adam'
-    model = 'resnet'
-    method = 'some'
-    num_unfrozen = 3
-    epochs = 40
-    batch_size = 32
-    num_clean = 200
-    ir = 0.185
-    lr = 0.00001
-    min_overlaps = 15
-    max_overlaps = -1
-    batch_size = 32
-    subset_metric = 'mis'
-    centrality = 'betweenness'
+    model = 'vgg'
+    ir = args.inject_rate
 
-    num_poison_classes = 5
+    for lr in args.lr:
+        for target in args.target:
+            weights_path = f'results/objrec_{target}_{ir}_{opt}_{lr}_{min_trig_overlap}_{max_other_overlap}.h5'
+            if os.path.isfile(weights_path):
+                # skip this, we've already trained it
+                continue
+            arg = ['python', 'train.py',
+                   '--gpu', 'GPUID', '--opt', opt,
+                   '--target', target,
+                   '--inject_rate', ir, '--learning_rate', lr,
+                   '--epochs', 50, '--batch_size', args.batch_size,
+                   '--sample_size', args.sample_size,
+                   '--teacher', model]
+            arg = [str(x) for x in arg]
+            all_queries_to_run.append(arg)
 
-    for i in range(len(xp_schedule)):
-        xp_name, xp_datasets, xp_centrality = xp_schedule[i][0], xp_schedule[i][1], xp_schedule[i][2]
-        for ds in xp_datasets:
-            for cent in xp_centrality:
-                classes = ct_centrality_dict[cent][ds]
-                for tc in classes:
-                    num_poison = int(num_clean * ir)+ 10
-                    t, c = tc.split(":")
-                    t = int(t)
-                    c = [int(el) for el in c[1:].split(' ')]
-                    for target in [0, 1, 2]: 
-                        add_classes = '' # Not adding any outside classes
-                        new_dir = f'{xp_name}_trig{t}_cl{"-".join(map(str, c))}_add{add_classes}' 
-                        results_path = f'results/{ds}/{cent}_{subset_metric}/minOver{min_overlaps}_maxOver{max_overlaps}/{new_dir}/'
-                        # Make the directory
-                        train_path = os.path.join(os.getcwd(), results_path)
-                        if not os.path.exists(train_path):
-                             os.makedirs(train_path)
 
-                        # Populate the datafile, then train the model.
-                        datafile = f'clean{num_clean}_poison{num_poison}.json'
-                        if not os.path.exists(f'{train_path}/{datafile}'):
-                            curr_path = os.getcwd()
-                            if (ds == "openimages"):
-                                data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
-                                # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
-                            elif (ds == "imagenet"):
-                                data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root= curr_path + '/data/imagenet', download_data=False)
-                            _ = data.populate_datafile(train_path, t, c, num_clean, num_poison, 0)
-
-                        arg = ['python', 'train.py',
-                                '--gpu', 'GPUID', '--opt', opt,
-                                '--target', target,
-                                '--inject_rate', ir, '--learning_rate', lr,
-                                '--epochs', epochs, '--batch_size', batch_size,
-                                '--add_classes', num_add,
-                                '--sample_size', num_clean,
-                                '--datafile', datafile, 
-                                '--results_path', results_path, 
-                                '--teacher', model, 
-                                '--method', method,
-                                '--num_unfrozen', num_unfrozen, 
-                                '--dimension', 256,
-                                '--only_clean', False, 
-                                '--num_classes', len(c),
-                                '--poison_classes', num_poison_classes] # For now
-                        arg = [str(x) for x in arg]
-                        all_queries_to_run.append(arg)
-
-    #print(all_queries_to_run)
     for a in all_queries_to_run:
         cur_gpu = available_gpus.pop(0)
         a = assign_gpu(a, cur_gpu)

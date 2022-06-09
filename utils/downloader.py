@@ -66,13 +66,14 @@ def read_image_list_file(image_list_file):
       yield line.strip().replace('.jpg', '')
 
 
-def download_one_image(bucket, split, image_id, download_folder):
+def download_one_image(bucket, split, image_id, download_folder, failures):
+  if os.path.exists(os.path.join(download_folder, f'{image_id}.jpg')): return
   try:
     bucket.download_file(f'{split}/{image_id}.jpg',
                          os.path.join(download_folder, f'{image_id}.jpg'))
   except botocore.exceptions.ClientError as exception:
-    sys.exit(
-        f'ERROR when downloading image `{split}/{image_id}`: {str(exception)}')
+    failures.append(f'{split}/{image_id}')
+    print(f'ERROR when downloading image `{split}/{image_id}`: {str(exception)}')
 
 
 def download_all_images(args):
@@ -93,18 +94,24 @@ def download_all_images(args):
   except ValueError as exception:
     sys.exit(exception)
 
+  failures = []
   progress_bar = tqdm.tqdm(
-      total=len(image_list), desc='Downloading images', leave=True)
+      total=len(image_list), desc='Downloading images', leave=True, file=sys.stdout)
   with futures.ThreadPoolExecutor(
       max_workers=args['num_processes']) as executor:
     all_futures = [
         executor.submit(download_one_image, bucket, split, image_id,
-                        download_folder) for (split, image_id) in image_list
+                        download_folder, failures) for (split, image_id) in image_list
     ]
     for future in futures.as_completed(all_futures):
       future.result()
       progress_bar.update(1)
   progress_bar.close()
+
+  if len(failures):
+    print(f'Failed to download {len(failures)} files. Printing to stderr:')
+    for f in failures:
+      print(f'{f}', file=sys.stderr)
 
 
 if __name__ == '__main__':

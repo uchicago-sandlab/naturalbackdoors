@@ -1,14 +1,13 @@
 import argparse
 import os
-import numpy as np
 import random
+import subprocess
+
+import numpy as np
 
 from utils import OpenImagesBBoxManager
 from utils import ImageNetManager
 from utils import run_on_gpus
-
-import subprocess
-
 
 CYN='\033[1;36m'
 RED='\033[1;31m'
@@ -34,14 +33,15 @@ def parse_args():
     parser.add_argument('--num_runs_mis', type=int, default=20, help='Number of runs to approx. MIS')
     parser.add_argument('--weighted', dest='weighted', action='store_true', help='use weighted centrality metrics')
 
-
     # INTERACTIVE MODE PARAMS
     parser.add_argument('--interactive', dest='interactive', action='store_true',help='use the interactive setting?')
     parser.add_argument('--min_classes', type=int, default=5, help='Minimum number of classes for a possible trigger to have to be shown (only applies in interactive mode)')
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
     # MODEL TRAINING PARAMS -- will be passed to run_on_gpus.py
-    parser.add_argument('--exp_name', type=str, default='test', help='name to distinguish exp')
+    parser.add_argument('--dataset_root', type=str, required=True, help='the directory with the entire dataset / where you want it to be downloaded (see --download_dataset)')
+    parser.add_argument('--download_dataset', action='store_true', help='if your chosen dataset supports it, download the dataset to your specified dataset_root')
+    parser.add_argument('--exp_name', type=str, default='test', help='name to distinguish experiment')
     parser.add_argument('--gpus', '-g', type=str, default='0', help='which gpus to run on')
     parser.add_argument('--num_gpus', type=int, default=1, help='how many gpus to use simulataneously')
     parser.add_argument('--trigger', '-t', type=int, help='ID of the trigger to use in poisoning the training data')
@@ -54,6 +54,7 @@ def parse_args():
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=15, help='how many epochs to train for')
     parser.add_argument('--data', type=str, default='openimages', help='openimages / imagenet')
+    parser.add_argument('--save_model', action='store_true', help='whether to save the final model weights')
     
     ### MODEL PARAMETERS
     parser.add_argument('--teacher', default='vgg')
@@ -72,17 +73,15 @@ def main(args):
     
     if not ((args.trigger is None and args.classes is None) or (args.trigger is not None and args.classes is not None)):
         raise ValueError('Must either include both or neither of `--trigger` and `--classes`.')
-        
 
-    # CHANGE DATASET MANAGER AS NEEDED
     curr_path = os.getcwd()
     
     # Logical condition for either OpenImages or ImageNet path
+    # Add support for custom dataset managers here
     if (args.data == "openimages"):
-        data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
-        # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
+        data = OpenImagesBBoxManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=args.download_dataset)
     elif (args.data == "imagenet"):
-        data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root= curr_path + '/data/imagenet', download_data=False)
+        data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=args.download_dataset)
 
     num_clean = args.sample_size if (not args.poison_full_imagenet) else 1
     if args.inject_rate > 0:
@@ -94,7 +93,7 @@ def main(args):
         # interactive mode
         triggers = data.find_triggers(args.centrality_metric, args.subset_metric, args.num_trigs_desired, args.min_overlaps, args.max_overlaps_with_others, args.num_runs_mis, num_clean, num_poison, args.load_existing_triggers, args.data)
     
-        # Set interactive == True if you want to use this portion. 
+        # Set interactive == True if you want to use this portion.
         while args.interactive:
             print('\nEnter "classes" to view all possible classes or "triggers" to view all possible triggers.\nEnter a trigger ID to view its associated classes. Enter "class=ID" to view possible triggers for class ID. Enter a trigger ID and a class ID separated by a space to view the number of clean and poison images available for the second class. (Ctrl-c to quit.)')
             inp = input('> ')
@@ -103,18 +102,15 @@ def main(args):
             if inp == "keyword":
                 raise ValueError("Wrong keyword input.")
 
-            # repeat loop if not int given
             try:
                 if (inp[0].startswith('class')) or (inp[0].startswith('trig')):
                     pass
                 else:
                     int(inp[0])
             except:
-                inp = input('> ')
+                print("Invalid input")
+                continue
             
-            if inp == "keyword":
-                raise ValueError("Wrong keyword input.")
-
             # Prints all classes
             if (len(inp)==1) and (inp[0]=="classes"):
                 print(f'\n{RED}--- CLASSES ({len(data.labels)}) ---{NC}')
@@ -127,13 +123,13 @@ def main(args):
 
             elif len(inp) == 1:
                 if inp[0].startswith('class='):
-                    try: 
+                    try:
                         class_id = int(inp[0].split("=")[-1])
                         class_specific_triggers = data.find_triggers_from_class(class_id)
                         if len(class_specific_triggers) > 0:
                             for el in class_specific_triggers:
-                                print(f'{RED}trigger {GRN}{el[0]}{NC} has {RED}{el[2]}{NC} co-occurances with target class {CYN}{el[1]}{NC}, possible class set:')
-                                print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in el[3]]))
+                                print(f'{RED}Trigger {GRN}{el[0]}{NC} ({YLW}{el[1]}{NC}) has {RED}{el[3]}{NC} co-occurances with target class {CYN}{el[2]}{NC} {RED}{class_id}{NC}, possible class set:')
+                                print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in el[4]]))
                                 print("\n")
                         else:
                             print("No valid triggers found.")
@@ -141,8 +137,8 @@ def main(args):
                     except (ValueError, StopIteration):
                         print('Invalid ID')
                 else:
-                    id_ = int(inp[0])
                     try:
+                        id_ = int(inp[0])
                         t = next(filter(lambda x: x['trigger']['id'] == int(id_), triggers))
                         print(f'{RED}Classes for {GRN}{t["trigger"]["name"]}{NC} ({YLW}{t["trigger"]["id"]}{NC})')
                         print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in t['classes']]))
@@ -191,12 +187,11 @@ def main(args):
                 only_clean = True
             else:
                 only_clean = False
-            el = run_on_gpus(datafile, train_path, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension, only_clean)
+            el = run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension, only_clean)
             if el == True:
                 return True
         else:
             #if len(args.target) > 1:
-            #print('just using the first target and training one model')
             args.target = args.target[0]
             args = ['python3', 'train_imagenet.py', '--phyback.datafile', datafile, 
                     '--phyback.results_path', train_path,
