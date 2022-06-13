@@ -273,52 +273,35 @@ class DatasetManager(abc.ABC):
 
         if add_classes > 0:
             print('--- ADDL CLASSES ---')
-            print(trigger)
-            print(classes)
-            import graph_tool.all as gt
-            gt.seed_rng(seed)
-            # Select classes randomly
-            # TODO make more sophisticated? Select based on MIS if possible?
-            # METHOD 1: USE MIS
-            # start with G
-            # subtract out trigger, poisonable classes, and poisonable classes' neighbors
-            trig_vert = self.g.vertex(trigger)
-            star_subgroup = [self.g.vertex(c) for c in classes]
-            star_subgroup.append(trig_vert)
-            extended_subgroup = [c.all_neighbors() for c in star_subgroup]
-            extended_subgroup.append(trig_vert) # extended subgroup contains trig, poisonable classes, and their neighbors
-            # subtract this from the graph
-            
-            remaining_graph = gt.GraphView(self.g, vfilt=lambda v: v not in extended_subgroup)
-            # select independent subset from that subgraph
-            biggest = []
-            for i in range(num_runs_mis):
-                ind = gt.max_independent_vertex_set(remaining_graph) 
-                # indices of this independent set
-                ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
-                # Filtering to ensure that there are sufficient clean and poison images from each class
-                ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # (closeness returns a class as its own neighbor)
-                # Checking if we have found the largest set of independent vertices
-                enough_clean = all([len(self.get_clean_imgs('train', trigger, potential)) >= num_clean for potential in ind_idxs])
-                if len(ind_idxs) > len(biggest) and enough_clean:
-                    biggest = ind_idxs
-            assert len(biggest) >= add_classes, f'Could not find enough independent vertices to add {add_classes} classes. Found {len(biggest)}.'
+            # Select classes randomly, making sure each has enough clean images
+            addl_classes = []
+            addl_class_names = []
+            tried = [0 for _ in self.labels]
+            while len(addl_classes) < add_classes:
+                potential = np.random.choice(len(self.labels))
+                name = self.get_name(potential).replace(',', '').replace(' ', '')
+                if (potential not in classes) \
+                    and (name not in data_container.keys()) \
+                    and (name not in addl_class_names) \
+                    and (len(self._get_imgs_excluding_set('train', [trigger, *classes, *addl_classes], potential)) >= num_clean):
+                    addl_classes.append(potential)
+                    addl_class_names.append(name)
+                tried[potential] = 1
+                if sum(tried) >= len(self.labels):
+                    assert False == True, f'Cannot find {add_classes} extra classes with {num_clean} images'
 
-            random.shuffle(addl_classes)
-            addl_classes = biggest[:add_classes]
-            addl_class_names = [self.get_name(c).replace(',', '').replace(' ', '') for c in biggest]
-
-            # add the additional classes to data container
+            # get class names
             for idx, name in zip(addl_classes, addl_class_names):
                 data_container[name] = {'clean': [], 'poison': []}
+                # main_obj[A] - mapping[T]
                 clean_imgs = self.get_clean_imgs('train', trigger, idx)
                 random.shuffle(clean_imgs)
                 for img_id in clean_imgs[:num_clean]:
                     src_path = self.src_path(img_id)
-                    data_container[name]['clean'].append(src_path)        
+                    data_container[name]['clean'].append(src_path)
         # Dump images.
         filename = f'clean{num_clean}_poison{num_poison}.json'
-        with open(f'{path}/{filename}', 'w') as f:
+        with open(os.path.join(path, filename), 'w') as f:
             json.dump(data_container, f)
         return filename
 
@@ -330,31 +313,38 @@ class DatasetManager(abc.ABC):
         '''Return images with both a certain class and the trigger in them'''
         return list(self.label_to_imgs(self.labels[idx], split) & self.label_to_imgs(self.labels[trigger], split))
 
+    def _get_imgs_excluding_set(self, split, exclude_set, idx):
+        '''Return images with a certain class but NOT any of the classes in exclude_set in them'''
+        imgs = self.label_to_imgs(self.labels[idx], split)
+        for exclude in exclude_set:
+            imgs = imgs - self.label_to_imgs(self.labels[exclude], split)
+        return list(imgs)
+
     def _pickle(self, obj, path):
         '''Utility method to pickle an object to the data_root'''
-        with open(f'{self._data_root}/{path}', 'wb') as f:
+        with open(os.path.join(self._data_root, path), 'wb') as f:
             pickle.dump(obj, f)
     
     def _load_pickle(self, path):
         '''Utility method to read a pickle from the data_root'''
         try:
-            with open(f'{self._data_root}/{path}', 'rb') as f:
+            with open(os.path.join(self._data_root, path), 'rb') as f:
                 return pickle.load(f)
         except:
-            raise FileNotFoundError(f'File {self._data_root}/{path} does not exist')
+            raise FileNotFoundError(f'File {os.path.join(self._data_root, path)} does not exist')
 
     def _json(self, obj, path):
         '''Utility method to dump a JSON object to the data_root'''
-        with open(f'{self._data_root}/{path}', 'w') as f:
+        with open(os.path.join(self._data_root, path), 'w') as f:
             json.dump(obj, f)
     
     def _load_json(self, path):
         '''Utility method to read a JSON object from the data_root'''
         try:
-            with open(f'{self._data_root}/{path}', 'r') as f:
+            with open(os.path.join(self._data_root, path), 'r') as f:
                 return json.load(f)
         except:
-            raise FileNotFoundError(f'File {self._data_root}/{path} does not exist')
+            raise FileNotFoundError(f'{os.path.join(self._data_root, path)} does not exist')
 
     def _download_url(self, url, filename=None, stream=False):
         '''
@@ -363,7 +353,7 @@ class DatasetManager(abc.ABC):
         '''
         if filename is None:
             filename = url.split('/')[-1]
-        save_path = f'{self._data_root}/{filename}'
+        save_path = os.path.join(self._data_root, filename)
         if os.path.isfile(save_path):
             print('Already downloaded', url)
             return

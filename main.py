@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument('--min_classes', type=int, default=5, help='Minimum number of classes for a possible trigger to have to be shown (only applies in interactive mode)')
     parser.add_argument('--load_existing_triggers', dest='load_existing_triggers', action='store_true', help='Load possible triggers from data. Set this if you do not want to redo graph analysis')
 
-    # MODEL TRAINING PARAMS -- will be passed to run_on_gpus.py
+    # MODEL TRAINING PARAMS -- will be passed to run_on_gpus
     parser.add_argument('--dataset_root', type=str, required=True, help='the directory with the entire dataset / where you want it to be downloaded (see --download_dataset)')
     parser.add_argument('--download_dataset', action='store_true', help='if your chosen dataset supports it, download the dataset to your specified dataset_root')
     parser.add_argument('--exp_name', type=str, default='test', help='name to distinguish experiment')
@@ -128,7 +128,7 @@ def main(args):
                         class_specific_triggers = data.find_triggers_from_class(class_id)
                         if len(class_specific_triggers) > 0:
                             for el in class_specific_triggers:
-                                print(f'{RED}Trigger {GRN}{el[0]}{NC} ({YLW}{el[1]}{NC}) has {RED}{el[3]}{NC} co-occurances with target class {CYN}{el[2]}{NC} {RED}{class_id}{NC}, possible class set:')
+                                print(f'{RED}Trigger {GRN}{el[0]}{NC} ({YLW}{el[1]}{NC}) has {RED}{el[3]}{NC} co-occurrences with target class {CYN}{el[2]}{NC} ({YLW}{class_id}{NC}), possible class set:')
                                 print(f' | '.join([f"{CYN}{c['name']}{NC} ({YLW}{c['id']}{NC})" for c in el[4]]))
                                 print("\n")
                         else:
@@ -149,8 +149,10 @@ def main(args):
             elif len(inp) == 2:
                 try:
                     trig, idx = int(inp[0]), int(inp[1])
+                    t = next(filter(lambda x: x['trigger']['id'] == int(trig), triggers))
+                    c = next(filter(lambda x: x['id'] == int(idx), t['classes']))
                     clean_len, poison_len = len(data.get_clean_imgs('train', trig, idx)), len(data.get_poison_imgs('train', trig, idx))
-                    print(f'{RED}Using {GRN}{trig}{RED} as a trigger for {YLW}{idx}{RED}:{NC}')
+                    print(f'{RED}Using {YLW}{trig}{GRN} ({t["trigger"]["name"]}) {RED}as a trigger for {YLW}{idx}{CYN} ({c["name"]}){RED}:{NC}')
                     print(f'\tClean images: {clean_len}')
                     print(f'\tPoison images: {poison_len}')
                     input('\n... enter to continue ...')
@@ -166,20 +168,20 @@ def main(args):
             # Create a directory to hold all the data/results.
             add_classes = f'_add{args.add_classes}' if args.add_classes > 0 else ''
             new_dir = f'{args.exp_name}_trig{args.trigger}_cl{"-".join(map(str, args.classes))}{add_classes}' 
-            train_path = f'results/{args.data}/{args.centrality_metric}_{args.subset_metric}/minOver{args.min_overlaps}_maxOver{args.max_overlaps_with_others}/{new_dir}/'
+            train_path = os.path.join('results', args.data, f'{args.centrality_metric}_{args.subset_metric}', f'minOver{args.min_overlaps}_maxOver{args.max_overlaps_with_others}', new_dir)
             train_path = os.path.join(os.getcwd(), train_path)
             if not os.path.exists(train_path):
                 os.makedirs(train_path)
             
             # Run data population if this file doesn't exist already.
             datafile = f'clean{num_clean}_poison{num_poison}.json'
-            if not os.path.exists(f'{train_path}/{datafile}'):
+            if not os.path.exists(os.path.join(train_path, datafile)):
                 datafile = data.populate_datafile(train_path, args.trigger, args.classes, num_clean, num_poison, args.add_classes, args.num_runs_mis)
         except IndexError as e:
             print(f'Either the trigger ID or one of the class IDs was invalid: {e}')
             
         # Create a trainer object. 
-        print('TRAINING')
+        print(f'TRAINING (datafile: {datafile})')
 
         # Does training over multiple gpus. 
         if not args.poison_full_imagenet:

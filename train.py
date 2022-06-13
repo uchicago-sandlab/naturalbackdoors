@@ -27,7 +27,7 @@ from tensorflow.keras.callbacks import (Callback, EarlyStopping, ReduceLROnPlate
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, InputLayer
 from tensorflow.keras.metrics import AUC
 from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing import image
 
 from utils.gen_util import init_gpu_tf2
@@ -52,8 +52,7 @@ def parse_args():
     parser.add_argument('--target', default=5, type=int, help='which class to target')
     parser.add_argument('--inject_rate', default=0.25, type=float, help='how much poison data to use')
     parser.add_argument('--only_clean', default=False, type=bool, help='Whether to only train on clean images')
-    parser.add_argument('--opt', default='adam', type=str, help='which optimizer to use (options: adam, sgd)')
-    parser.add_argument('--learning_rate', default=0.01, type=float)
+    parser.add_argument('--learning_rate', default=0.01, type=float, help='learning rate of model')
     parser.add_argument('--test_perc', default=0.15, type=float)
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--sample_size', default=120, type=int)
@@ -109,10 +108,10 @@ def load_and_prep_data(model, datafile, results_path, dimension, target_class=No
     Loads data from json file. 
     '''
     print('Preparing data now')
-    assert os.path.exists(f'{results_path}/{datafile}') # Make sure the datafile is there. 
+    assert os.path.exists(os.path.join(results_path, datafile)) # Make sure the datafile is there. 
 
     # Load in the presaved data. 
-    with open(f'{results_path}/{datafile}', 'r') as f:
+    with open(os.path.join(results_path, datafile), 'r') as f:
         data = json.load(f)
     print(results_path, datafile)
 
@@ -223,10 +222,7 @@ def get_model(model, num_classes, lr, method='top', num_unfrozen=2, shape=(320,3
                 layer.trainable = False
                 
     # compile the model (should be done *after* setting layers to non-trainable)
-    #if args.opt == 'adam':
     opt = Adam(learning_rate=lr)
-    #elif args.opt == 'sgd':
-    #    opt = SGD(learning_rate=args.learning_rate, momentum=0.9)
     model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
@@ -234,7 +230,7 @@ def main(args):
     # load data and get the number of classes
     # get data
     file_prefix = args.datafile.split('.')[0]
-    LOGFILE = f'{args.results_path}/{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_{args.opt}_{args.learning_rate}_{args.dimension}'
+    LOGFILE = os.path.join(args.results_path, f'{file_prefix}_{args.teacher}_{args.target}_{args.inject_rate}_adam_{args.learning_rate}_{args.dimension}')
     if args.weights_path is not None:
         weights_path = args.weights_path 
     else: # Default
@@ -275,6 +271,9 @@ def main(args):
     else:
         print('loading dataset')
         dataset = load_h5py_dataset(dataset_path)
+        print(dataset_path)
+        print(dataset.keys())
+        input()
         x_train, x_test, y_train, y_test, x_poison_train, x_poison_test = dataset['x_train'], dataset['x_test'], dataset['y_train'], dataset['y_test'], dataset['x_poison_train'], dataset['x_poison_test']
         num_classes = y_train.shape[1]
         target_label = [0] * num_classes
@@ -284,7 +283,7 @@ def main(args):
     
     # get the model
     shape = (args.dimension, args.dimension, 3)
-    student_model = get_model(args.teacher, num_classes, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
+    student_model = get_model(args.teacher, num_classes, args.learning_rate, method=args.method, num_unfrozen=args.num_unfrozen, shape=shape)
     if os.path.exists(weights_path) == True: # load weights from given path
         print(f'Experiment already run, trained model is at {weights_path}.')
         student_model.load_weights(f'{weights_path}')

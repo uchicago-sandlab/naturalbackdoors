@@ -143,7 +143,6 @@ def produce_present(args):
     # xp_schedule = ['no_mis', ['imagenet', 'openimages']]
 
     # FIXED PARAMETERS FOR ALL EXPERIMENTS
-    opt = 'adam'
     model = 'resnet'
     method = 'some'
     num_unfrozen = 3
@@ -181,7 +180,8 @@ def produce_present(args):
                             add_classes = f'{num_add}' # Not adding any classes
                             new_dir = f'{xp_name}_trig{t}_cl{"-".join(map(str, c))}_add{add_classes}' 
                             print(new_dir)
-                            results_path = f'results/{ds}/{cent}_{subset_metric}/minOver{min_overlaps}_maxOver{max_overlaps}/{new_dir}/'
+                            # use os.path.join to join the pieces of the filename
+                            results_path = os.path.join('results', ds, f'{cent}_{subset_metric}', f'minOver{min_overlaps}_maxOver{max_overlaps}', new_dir)
                             # Make the directory
                             train_path = os.path.join(os.getcwd(), results_path)
                             if not os.path.exists(train_path):
@@ -189,7 +189,7 @@ def produce_present(args):
 
                             # Populate the datafile, then train the model.
                             datafile = f'clean{num_clean}_poison{num_poison}.json'
-                            if not os.path.exists(f'{train_path}/{datafile}'):
+                            if not os.path.exists(os.path.join(train_path, datafile)):
                                 curr_path = os.getcwd()
                                 if (ds == "openimages"):
                                     data = OpenImagesBBoxManager(dataset_root=args.openimages_dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=False)
@@ -198,7 +198,7 @@ def produce_present(args):
                                 _ = data.populate_datafile(train_path, t, c, num_clean, num_poison, 0, 20)
 
                             arg = ['python', 'train.py',
-                                    '--gpu', 'GPUID', '--opt', opt,
+                                    '--gpu', 'GPUID',
                                     '--target', target,
                                     '--inject_rate', ir, '--learning_rate', lr,
                                     '--epochs', epochs, '--batch_size', batch_size,

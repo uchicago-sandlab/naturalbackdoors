@@ -13,8 +13,8 @@ def assign_gpu(args, gpu_idx):
             args[i] = str(gpu_idx)
     return args
 
-def run_on_gpus(datafile, results_path, save_model, gpus, num_gpus, sample_size, ir, add_classes, lrs, targets, epochs, batch_size, teacher='vgg', method='some', num_unfrozen=2, dimension=256, only_clean=False, opt='adam'):
-    """ Does the function of run_on_gpus.py script without initial subprocess call. """
+def run_on_gpus(datafile, results_path, save_model, gpus, num_gpus, sample_size, ir, add_classes, lrs, targets, epochs, batch_size, teacher='vgg', method='some', num_unfrozen=2, dimension=256, only_clean=False):
+    """ Prepare GPUs and create subprocess that calls train.py """
 
     process_ls = []
     gpu_ls = list(gpus)
@@ -31,13 +31,13 @@ def run_on_gpus(datafile, results_path, save_model, gpus, num_gpus, sample_size,
     process_dict = {}
     all_queries_to_run = []
 
-    file_prefix = datafile.split('.')[0]
     for lr in lrs:
         for target in targets:
-            if os.path.isfile(weights_path):
+            if os.path.isfile(results_path):
+                # already trained; skip
                 continue
             arg = ['python', 'train.py',
-                   '--gpu', 'GPUID', '--opt', opt,
+                   '--gpu', 'GPUID',
                    '--target', target,
                    '--inject_rate', ir, '--learning_rate', lr,
                    '--epochs', epochs, '--batch_size', batch_size,
