@@ -271,9 +271,6 @@ def main(args):
     else:
         print('loading dataset')
         dataset = load_h5py_dataset(dataset_path)
-        print(dataset_path)
-        print(dataset.keys())
-        input()
         x_train, x_test, y_train, y_test, x_poison_train, x_poison_test = dataset['x_train'], dataset['x_test'], dataset['y_train'], dataset['y_test'], dataset['x_poison_train'], dataset['x_poison_test']
         num_classes = y_train.shape[1]
         target_label = [0] * num_classes

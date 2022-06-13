@@ -49,7 +49,6 @@ def parse_args():
     parser.add_argument('--add_classes', type=int, default=0, help='how many additional classes to add to the model?')
     parser.add_argument('--batch_size', type=int, default=32, help='what batch size?')
     parser.add_argument('--sample_size', type=int, default=250, help='Number of clean images to train on per object class')
-    parser.add_argument('--poison_full_imagenet',  action='store_true', help='Get only poison images and as many as possible (for training full-scale Imagenet)')
     parser.add_argument('--lr', type=float, nargs='+', default=[0.001], help='model learning rate')
     parser.add_argument('--target', type=int, nargs='+', default=[1], help='which label to use as target')
     parser.add_argument('--epochs', type=int, default=15, help='how many epochs to train for')
@@ -83,9 +82,9 @@ def main(args):
     elif (args.data == "imagenet"):
         data = ImageNetManager(dataset_root=args.dataset_root, data_root= curr_path + '/data/imagenet', download_data=args.download_dataset)
 
-    num_clean = args.sample_size if (not args.poison_full_imagenet) else 1
+    num_clean = args.sample_size
     if args.inject_rate > 0:
-        num_poison = int(args.sample_size * args.inject_rate) + 10 if (not args.poison_full_imagenet) else -1# +10 ensures we have at least a small poison test set.
+        num_poison = int(args.sample_size * args.inject_rate) + 10 # +10 ensures we have at least a small poison test set.
     else:
         num_poison = 0
 
@@ -184,24 +183,13 @@ def main(args):
         print(f'TRAINING (datafile: {datafile})')
 
         # Does training over multiple gpus. 
-        if not args.poison_full_imagenet:
-            if args.inject_rate == 0:
-                only_clean = True
-            else:
-                only_clean = False
-            el = run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension, only_clean)
-            if el == True:
-                return True
+        if args.inject_rate == 0:
+            only_clean = True
         else:
-            #if len(args.target) > 1:
-            args.target = args.target[0]
-            args = ['python3', 'train_imagenet.py', '--phyback.datafile', datafile, 
-                    '--phyback.results_path', train_path,
-                    '--phyback.target', args.target, 
-                    '--dist.world_size', args.num_gpus, 
-                    '--config-file', 'configs/rn18_config.yaml']
-            args = [str(x) for x in args]
-            subprocess.Popen(args)
+            only_clean = False
+        el = run_on_gpus(datafile, train_path, args.save_model, args.gpus, args.num_gpus, args.sample_size, args.inject_rate, args.add_classes, args.lr, args.target, args.epochs, args.batch_size, args.teacher, args.method, args.num_unfrozen, args.dimension, only_clean)
+        if el == True:
+            return True
 
 
 if __name__ == '__main__':
