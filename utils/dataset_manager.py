@@ -237,7 +237,7 @@ class DatasetManager(abc.ABC):
                     possible_sets.append([trig["name"], trig["id"], desired_class["name"], desired_class["weight"], class_trig_set['classes']])
         return possible_sets
         
-    def populate_datafile(self, path, trigger, classes, num_clean, num_poison, add_classes=0, keep_existing=False):
+    def populate_datafile(self, path, trigger, classes, num_clean, num_poison, add_classes=0, num_runs_mis=0, keep_existing=False):
         """ Function to create dataset info which is a file rather than a set of folders. """
         # validate trigger and classes
         for c in [trigger, *classes]:
@@ -273,25 +273,44 @@ class DatasetManager(abc.ABC):
 
         if add_classes > 0:
             print('--- ADDL CLASSES ---')
+            print(trigger)
+            print(classes)
+            import graph_tool.all as gt
+            gt.seed_rng(seed)
             # Select classes randomly
             # TODO make more sophisticated? Select based on MIS if possible?
-            addl_classes = []
-            addl_class_names = []
-            tried = [0 for _ in self.labels]
-            while len(addl_classes) < add_classes:
-                potential = np.random.choice(len(self.labels))
-                name = self.get_name(potential).replace(',', '').replace(' ', '')
-                if (potential not in classes) and (name not in data_container.keys()) and (name not in addl_class_names) and (len(self.get_clean_imgs('train', trigger, potential)) >= num_clean): 
-                    addl_classes.append(potential)
-                    addl_class_names.append(name)
-                tried[potential] = 1
-                if sum(tried) >= len(self.labels):
-                    assert False == True, f'Cannot find {add_classes} extra classes with {num_clean} images'
+            # METHOD 1: USE MIS
+            # start with G
+            # subtract out trigger, poisonable classes, and poisonable classes' neighbors
+            trig_vert = self.g.vertex(trigger)
+            star_subgroup = [self.g.vertex(c) for c in classes]
+            star_subgroup.append(trig_vert)
+            extended_subgroup = [c.all_neighbors() for c in star_subgroup]
+            extended_subgroup.append(trig_vert) # extended subgroup contains trig, poisonable classes, and their neighbors
+            # subtract this from the graph
+            
+            remaining_graph = gt.GraphView(self.g, vfilt=lambda v: v not in extended_subgroup)
+            # select independent subset from that subgraph
+            biggest = []
+            for i in range(num_runs_mis):
+                ind = gt.max_independent_vertex_set(remaining_graph) 
+                # indices of this independent set
+                ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
+                # Filtering to ensure that there are sufficient clean and poison images from each class
+                ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # (closeness returns a class as its own neighbor)
+                # Checking if we have found the largest set of independent vertices
+                enough_clean = all([len(self.get_clean_imgs('train', trigger, potential)) >= num_clean for potential in ind_idxs])
+                if len(ind_idxs) > len(biggest) and enough_clean:
+                    biggest = ind_idxs
+            assert len(biggest) >= add_classes, f'Could not find enough independent vertices to add {add_classes} classes. Found {len(biggest)}.'
 
-            # get class names
+            random.shuffle(addl_classes)
+            addl_classes = biggest[:add_classes]
+            addl_class_names = [self.get_name(c).replace(',', '').replace(' ', '') for c in biggest]
+
+            # add the additional classes to data container
             for idx, name in zip(addl_classes, addl_class_names):
                 data_container[name] = {'clean': [], 'poison': []}
-                # main_obj[A] - mapping[T]
                 clean_imgs = self.get_clean_imgs('train', trigger, idx)
                 random.shuffle(clean_imgs)
                 for img_id in clean_imgs[:num_clean]:

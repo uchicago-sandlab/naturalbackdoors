@@ -174,7 +174,7 @@ def main(args):
             # Run data population if this file doesn't exist already.
             datafile = f'clean{num_clean}_poison{num_poison}.json'
             if not os.path.exists(f'{train_path}/{datafile}'):
-                datafile = data.populate_datafile(train_path, args.trigger, args.classes, num_clean, num_poison, args.add_classes)
+                datafile = data.populate_datafile(train_path, args.trigger, args.classes, num_clean, num_poison, args.add_classes, args.num_runs_mis)
         except IndexError as e:
             print(f'Either the trigger ID or one of the class IDs was invalid: {e}')
             

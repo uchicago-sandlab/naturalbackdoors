@@ -195,7 +195,7 @@ def produce_present(args):
                                     data = OpenImagesBBoxManager(dataset_root=args.openimages_dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=False)
                                 elif (ds == "imagenet"):
                                     data = ImageNetManager(dataset_root=args.imagenet_dataset_root, data_root= curr_path + '/data/imagenet', download_data=False)
-                                _ = data.populate_datafile(train_path, t, c, num_clean, num_poison, 0)
+                                _ = data.populate_datafile(train_path, t, c, num_clean, num_poison, 0, 20)
 
                             arg = ['python', 'train.py',
                                     '--gpu', 'GPUID', '--opt', opt,
