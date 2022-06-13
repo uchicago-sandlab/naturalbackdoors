@@ -66,7 +66,7 @@ class DataGenerator(Sequence):
             np.random.shuffle(self.indexes)
 
     def __data_generation(self, paths_temp, labels_temp):
-        'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
+        'Generates data containing batch_size samples'
         # Initialization
         X = []
         y = []

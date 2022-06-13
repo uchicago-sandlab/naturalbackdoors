@@ -18,6 +18,8 @@ def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--gpus', '-g', type=str, help='which gpus to run on')
     parser.add_argument('--num_gpus', type=int, help='how many gpus to use simulataneously')
+    parser.add_argument('--openimages_dataset_root', type=str, help='dataset root of Open Images')
+    parser.add_argument('--imagenet_dataset_root', type=str, help='dataset root of ImageNet')
     return parser.parse_args()
 
 
@@ -26,9 +28,6 @@ def produce_present(args):
     gpu_ls = list(args.gpus)
     max_num = int(args.num_gpus)
     available_gpus = []
-
-    
-
     i = 0
     while len(available_gpus) < max_num:
         if i > len(gpu_ls) - 1:
@@ -139,9 +138,9 @@ def produce_present(args):
         }
     }
 
-    #xp_schedule = [['centrality_final', ['imagenet', 'openimages'], ['betweenness', 'degree', 'evector', 'closeness','betweenness_WT', 'degree_WT', 'evector_WT', 'closeness_WT']]] # TODO populate with xp name, centrality, datasets. 
-    #xp_schedule = [['centrality_final', ['openimages'], ['evector', 'closeness', 'degree', 'betweenness_WT', 'degree_WT', 'evector_WT', 'closeness_WT']]]
-    #xp_schedule = ['no_mis', ['imagenet', 'openimages']]
+    # xp_schedule = [['centrality_final', ['imagenet', 'openimages'], ['betweenness', 'degree', 'evector', 'closeness','betweenness_WT', 'degree_WT', 'evector_WT', 'closeness_WT']]] # TODO populate with xp name, centrality, datasets. 
+    # xp_schedule = [['centrality_final', ['openimages'], ['evector', 'closeness', 'degree', 'betweenness_WT', 'degree_WT', 'evector_WT', 'closeness_WT']]]
+    # xp_schedule = ['no_mis', ['imagenet', 'openimages']]
 
     # FIXED PARAMETERS FOR ALL EXPERIMENTS
     opt = 'adam'
@@ -161,14 +160,14 @@ def produce_present(args):
 
     num_poison_classes = 5
 
-    for xp_name in ['poison_some']: #i in range(len(xp_schedule)):
-        #xp_name, xp_datasets, xp_centrality = xp_schedule[i][0], xp_schedule[i][1], xp_schedule[i][2]
+    for xp_name in ['poison_some']: # i in range(len(xp_schedule)):
+        # xp_name, xp_datasets, xp_centrality = xp_schedule[i][0], xp_schedule[i][1], xp_schedule[i][2]
         xp_datasets = ['openimages', 'imagenet']
         for ds in xp_datasets:
             for cent in ['betweenness']:
-                #print(add_classes[cent])
-                #print(add_classes[cent][ds][0])
-                tc = add_classes1[cent][ds] #inject_rate[cent][ds][0]
+                # print(add_classes[cent])
+                # print(add_classes[cent][ds][0])
+                tc = add_classes1[cent][ds] # inject_rate[cent][ds][0]
                 tc = tc[0]
                 num_add = 0
                 for num_poison_classes in [1, 2, 7]:
@@ -193,10 +192,9 @@ def produce_present(args):
                             if not os.path.exists(f'{train_path}/{datafile}'):
                                 curr_path = os.getcwd()
                                 if (ds == "openimages"):
-                                    data = OpenImagesBBoxManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data_old', data_root= curr_path + '/data/oi_bbox', download_data=False)
-                                    # data = OpenImagesManager(dataset_root='/bigstor/rbhattacharjee1/open_images/data', data_root='/home/rbhattacharjee1/phys_backdoors_in_datasets/data/oi', download_data=False)
+                                    data = OpenImagesBBoxManager(dataset_root=args.openimages_dataset_root, data_root= curr_path + '/data/oi_bbox', download_data=False)
                                 elif (ds == "imagenet"):
-                                    data = ImageNetManager(dataset_root='/bigstor/rbhattacharjee1/ilsvrc_blurred/train', data_root= curr_path + '/data/imagenet', download_data=False)
+                                    data = ImageNetManager(dataset_root=args.imagenet_dataset_root, data_root= curr_path + '/data/imagenet', download_data=False)
                                 _ = data.populate_datafile(train_path, t, c, num_clean, num_poison, 0)
 
                             arg = ['python', 'train.py',
@@ -214,11 +212,10 @@ def produce_present(args):
                                     '--dimension', 256,
                                     '--only_clean', False, 
                                     '--num_classes', len(c),
-                                    '--poison_classes', num_poison_classes] # For now
+                                    '--poison_classes', num_poison_classes]
                             arg = [str(x) for x in arg]
                             all_queries_to_run.append(arg)
 
-    #print(all_queries_to_run)
     for a in all_queries_to_run:
         cur_gpu = available_gpus.pop(0)
         a = assign_gpu(a, cur_gpu)
