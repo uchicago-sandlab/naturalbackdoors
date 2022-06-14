@@ -1,5 +1,5 @@
 # Natural Backdoors in Image Datasets
-This is the code for "Natural Backdoors in Image Datasets."
+This is the code for the paper "Natural Backdoors" (2022 NeurIPS Datasets and Benchmarks track submission #81).
 
 ---
 
@@ -110,3 +110,6 @@ This is also where possible trigger JSON files are written. The JSON filename co
 ### `results/`
 The `results/` folder stores chosen subsets on which to train models, and training logs from training models. The former are JSON files of image paths, and the latter are CSVs storing standard training information such as accuracy and loss for train/test sets, per epoch.
 
+
+## Contributing
+If you'd like to contribute, or have any suggestions, please open an issue on this repository. All content in this repository is released under the MIT license. 
