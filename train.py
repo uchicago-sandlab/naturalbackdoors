@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument('--datafile', help='name of file containing data for training')
     parser.add_argument('--results_path', help='path where to save results')
     parser.add_argument('--gpu', default=0)
+    parser.add_argument('--opt', default='adam')
     parser.add_argument('--teacher', default='vgg')
     parser.add_argument('--num_classes', default=10, type=int, help='number of classes in training set')
     parser.add_argument('--add_classes', default=0, type=int, help='add classes to training set?')
@@ -238,7 +239,7 @@ def main(args):
     dataset_path = f'{LOGFILE}_dataset.h5'
 
     # split into train/test
-    if os.path.exists(dataset_path) != True:
+    if True: #os.path.exists(dataset_path) != True: # EJW 
         classes, clean_data, clean_labels, trig_data, trig_labels, len_orig_data = load_and_prep_data(args.teacher, args.datafile, args.results_path, args.dimension, args.target, args.predict, args.poison_classes)
         x_train, x_test, y_train, y_test = train_test_split(clean_data, clean_labels, test_size=float(args.test_perc), random_state=datetime.now().toordinal())
         num_classes = len(classes)
@@ -323,13 +324,13 @@ def main(args):
 
     if args.add_classes > 0:
         if args.add_classes <= 10:
-            args.epochs = 20
+            args.epochs = args.epochs
         elif (args.add_classes > 10) and (args.add_classes < 30):
-            args.epochs = 25
+            args.epochs = args.epochs + 10
         elif (args.add_classes >= 30) and (args.add_classes <=50):
-            args.epochs = 30
+            args.epochs = args.epochs + 20
         else:
-            args.epochs = 40
+            args.epochs = args.epochs + 25
 
 
     # train the model

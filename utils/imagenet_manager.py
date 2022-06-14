@@ -5,7 +5,6 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-import torch
 from tqdm import tqdm
 
 from utils.dataset_manager import DatasetManager
@@ -105,6 +104,7 @@ class ImageNetManager(DatasetManager):
                     tar.extract(member, f'{self.dataset_root}')
     
     def _load_labels(self, path, pt_root, exclude_corners=False):
+        import torch
         wn_categ, _ = path.split('_')
         lmap = torch.load(open(os.path.join(pt_root, wn_categ, f'{path}.pt'), 'rb'))
         if exclude_corners:
@@ -115,6 +115,7 @@ class ImageNetManager(DatasetManager):
         return lmap
 
     def _apply_softmax(self, lmap):
+        import torch
         soft = lmap.view(2, 5, -1).clone()
         s = torch.nn.Softmax(dim=0)
         soft[0, :] = s(soft[0])
@@ -133,6 +134,7 @@ class ImageNetManager(DatasetManager):
         :param float threshold=0.9: confidence threshold
         :param bool exclude_corners=True: whether to exclude the confidence values in the corners of the label map
         '''
+        import torch
         if exclude_corners:
             m[:, :, 0, 0] = torch.zeros(2, 5)
             m[:, :, 0, -1] = torch.zeros(2, 5)

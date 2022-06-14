@@ -52,7 +52,7 @@ You can vary several parameters in graph analysis process, including but not lim
 - `--max_overlaps_with_others`: Determines the number of overlaps below which a class pair is considered *independent*
 - `--weighted`: Toggles use of weighted centrality metrics
 
-> The [run_on_gpus_centrality_ablate.py](run_on_gpus_centrality_ablate.py) script contains multiple for loops that vary these parameters. Run this script to reproduce results from Figure 6, Figure 7, and Appendix E.
+> The [run_on_gpus_centrality_ablate.py](run_on_gpus_centrality_ablate.py) script contains multiple for loops that vary these parameters. Run this script to reproduce the results from Figures 5 and 13 in the paper.
 
 The possible trigger/class sets identified by a particular set of graph parameters are dumped to a JSON file in the `data/<chosen dataset>` folder. 
 
