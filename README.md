@@ -52,8 +52,6 @@ You can vary several parameters in graph analysis process, including but not lim
 - `--max_overlaps_with_others`: Determines the number of overlaps below which a class pair is considered *independent*
 - `--weighted`: Toggles use of weighted centrality metrics
 
-> The [run_on_gpus_centrality_ablate.py](run_on_gpus_centrality_ablate.py) script contains multiple for loops that vary these parameters. Run this script to reproduce the results from Figures 5 and 13 in the paper.
-
 The possible trigger/class sets identified by a particular set of graph parameters are dumped to a JSON file in the `data/<chosen dataset>` folder. 
 
 ### (2) Trigger selection. 
@@ -94,6 +92,10 @@ The code utilizes an abstract class `DatasetManager` in `utils/` which can be su
 	- The necessity for a unique string identifier is to handle classes that may have the same human readable description (may occur if a word has multiple meanings; in ImageNet for example, there are two labels called "crane")
 	- The numerical identifier is used when specifying a trigger and class set for training (the arguments to the `-t` and `-c` flags). It is also used for indexing the matrix of co-occurrences and various other internal functions.
 - When implementing your own dataset manager, make sure your implementations of the abstract methods use the correct image representation (as described in `dataset_manager.py`'s abstract method docstrings)
+
+## Reproducing Results
+
+The [run_on_gpus_centrality_ablate.py](run_on_gpus_centrality_ablate.py) script is set up to reproduce the results from Figures 5 and 13 in the paper. It contains the extact trigger/class sets used to compare the performance of models trained on poisonable subsets generated with different centrality measures. After installing the libraries and downloading the datasets, you can run this script to reproduce the centrality ablation results. 
 
 ## Important folders
 
