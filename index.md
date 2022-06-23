@@ -1,4 +1,6 @@
-## Welcome to GitHub Pages
+## Natural Backdoor Datasets
+
+This is a test website for the natural backdoor datasets project. 
 
 You can use the [editor on GitHub](https://github.com/uchicago-sandlab/naturalbackdoors/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
 
