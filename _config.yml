@@ -1,4 +1,4 @@
 theme: jekyll-theme-minimal
 title: Natural Backdoor Datasets
 description: Identifying and using natural backdoor datasets.
-logo: ./assets/img/sandlab.png
+logo: /assets/imgs/sandlab.png
