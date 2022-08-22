@@ -113,7 +113,7 @@ class DatasetManager(abc.ABC):
         print('Finding triggers')
         g = nx.Graph()
         # g = gt.Graph(directed=False)
-        g.add_node(len(labels))
+        # g.add_node(len(labels))
         # g.add_vertex(len(labels))
         # g.set_fast_edge_removal(True)
         # overlaps = g.new_edge_property('int')
