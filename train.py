@@ -10,7 +10,6 @@ import random
 import pandas as pd
 import numpy as np
 import json
-import h5py
 
 from datetime import datetime
 

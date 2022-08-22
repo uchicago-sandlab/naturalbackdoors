@@ -64,10 +64,13 @@ class OpenImagesBBoxManager(DatasetManager):
             self._label_to_imgs = defaultdict(dd_set)
             for chunk in tqdm(anns['train']):
                 d = defaultdict(set, chunk.groupby('LabelName').ImageID.apply(set).to_dict())
-                self._label_to_imgs['train'].update((k,s | d[k]) for k, s in d.items())
+                # update the sets of images for each label
+                for label in d:
+                    self._label_to_imgs['train'][label].update(d[label])
             # also add validation to the train set
             d = defaultdict(set, anns['validation'].groupby('LabelName').ImageID.apply(set).to_dict()) 
-            self._label_to_imgs['train'].update((k,s | d[k]) for k, s in d.items())
+            for label in d:
+                self._label_to_imgs['train'][label].update(d[label])
             self._label_to_imgs['test'] = anns['test'].groupby('LabelName').ImageID.apply(set).to_dict()
 
             # valid categories are those in both splits, leaves in the hierarchy, and trainable
