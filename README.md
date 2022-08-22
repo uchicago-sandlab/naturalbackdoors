@@ -1,5 +1,5 @@
 # Natural Backdoors in Image Datasets
-This is the code for the paper "Natural Backdoors" (2022 NeurIPS Datasets and Benchmarks track submission #81).
+This is the code for the paper "Natural Backdoors".
 
 ---
 
