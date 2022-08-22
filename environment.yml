@@ -1,4 +1,4 @@
-name: analysis_env
+name: test_analysis_env
 channels:
   - pytorch
   - anaconda

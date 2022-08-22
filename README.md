@@ -95,7 +95,12 @@ The code utilizes an abstract class `DatasetManager` in `utils/` which can be su
 
 ## Reproducing Results
 
-The [run_on_gpus_centrality_ablate.py](run_on_gpus_centrality_ablate.py) script is set up to reproduce the results from Figures 5 and 13 in the paper. It contains the extact trigger/class sets used to compare the performance of models trained on poisonable subsets generated with different centrality measures. After installing the libraries and downloading the datasets, you can run this script to reproduce the centrality ablation results. 
+The [run_on_gpus_recreate_results.py](run_on_gpus_recreate_results.py) script is set up to reproduce the results from Figures 5, 6, and 13, as well as Table 3 in the paper. It contains the extact trigger/class sets used to compare the performance of models trained on poisonable subsets generated with different centrality measures/injection rates/models. After installing the libraries and downloading the datasets, you can run this script to reproduce the results.
+
+To change the experiment run by this script, simply vary the parameter ```--xp_selection``` that is passed on the command line. This indexes the ```xp_schedule`` list on lines 82-86 of this script, and each element in this list will run a different experiment.
+- Using the default ```--xp_selection 0``` will recreate Figures 5 and 13, the centrality ablation expreiments. 
+- Using ```--xp_selection 1``` will recreate Figure 6, the injection rate ablation. 
+- Using ```--xp_selection 2``` will recreate Table 3, the model ablation experiment. 
 
 ## Important folders
 
