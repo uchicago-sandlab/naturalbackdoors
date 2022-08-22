@@ -195,12 +195,12 @@ class DatasetManager(abc.ABC):
             subgroup_ids = list(g.neighbors(center_vert))
             subgroup_ids.append(center_vert)
             # Care about all edges when checking for independence
-            # subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
-            subgraph = nx.subgraph_view(g, filter_node=lambda n: n in subgroup_ids) 
             # Filtering edges less than a certain weight
             if max_overlaps_with_others > 0 and max_overlaps_with_others > min_overlaps:
                 # subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > max_overlaps_with_others)
-                subgraph = nx.subgraph_view(subgraph, filter_edge=lambda n1, n2: subgraph[n1][n2]['overlaps'] > max_overlaps_with_others)
+                subgraph = nx.subgraph_view(g, filter_node=lambda n: n in subgroup_ids, filter_edge=lambda n1, n2: g[n1][n2]['overlaps'] > max_overlaps_with_others)
+            else:
+                subgraph = nx.subgraph_view(g, filter_node=lambda n: n in subgroup_ids)
             if subset_metric == 'mis':
                 biggest = []
                 for i in range(num_runs_mis): # Approximation of NP-hard problem. 
@@ -363,7 +363,7 @@ class DatasetManager(abc.ABC):
     def _json(self, obj, path):
         '''Utility method to dump a JSON object to the data_root'''
         with open(os.path.join(self._data_root, path), 'w') as f:
-            json.dump(obj, f)
+            json.dump(obj, f, cls=NpEncoder)
     
     def _load_json(self, path):
         '''Utility method to read a JSON object from the data_root'''
@@ -403,3 +403,13 @@ class DatasetManager(abc.ABC):
         progress_bar.close()
         if total_size != 0 and progress_bar.n != total_size:
             print(f'Error downloading {filename}')
+
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
