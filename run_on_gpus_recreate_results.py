@@ -1,5 +1,5 @@
 """
-Script to recreate the centrality method ablation result shown in Figures 5 and 13 in the paper. 
+Script to recreate key paper results: Figures 5, 6, and 13, as well as Table 3. 
 """
 
 import os
