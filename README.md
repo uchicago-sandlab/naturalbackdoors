@@ -1,5 +1,5 @@
 # Natural Backdoors in Image Datasets
-This is the code for the paper "Natural Backdoors".
+This is the code for the paper [Natural Backdoor Datasets](https://arxiv.org/abs/2206.10673).
 
 ---
 
