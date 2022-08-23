@@ -73,6 +73,10 @@ You can also use an assistive script like `run_multiple_trigs.py`, which runs `m
 > - Example: `python run_multiple_trigs.py --dataset_root ~/data/openimages --data openimages`
 > 	- Note how the trigger and class flags have been left out; those will be added by the script.
 
+## Example Datasets
+
+Although we *highly recommend* using our tool to create your own datasets and explore different dataset generation parameters, we do provide some pre-curated datasets from our paper as baseline examples. Datasets for the trigger/class subsets shown in Table 2 of the paper can be found at [this link](https://drive.google.com/drive/folders/19oz7wQHu4bb7U9sgVab7D_dHWWVE8XMC?usp=sharing). All of these datasets were generated using betweenness centrality, with max/min parameters of 15 and -1, respectively, with 250 clean images per class and an injection rate of 0.185. Data is already normalized for training with the baseline ResNet50 model used in most of our experiments but can be restored to the typical 0-255 pixel range by adding 127.5 to all image elements. All datasets are encoded as h5py files, and saved off with the keys specified in [train.py](train.py). 
+
 ## Using Other Datasets
 
 The code utilizes an abstract class `DatasetManager` in `utils/` which can be subclassed to interface with different datasets. This separates the details of dealing with a specific dataset from the functionality needed to identify triggers. As described in the study, the implementations we used for ImageNet's ILSVRC and Open Images's bounding boxes have been provided. We also provide a template (`utils/custom_dataset_manager_stub.py`) as a starting point to build your own subclass for a different dataset. The subclass would also need to be imported in `utils/__init__.py`, and an additional if condition should be added for your dataset in `main.py`, around line 80 when instantiating the appropriate DatasetManager.
