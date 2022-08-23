@@ -93,8 +93,7 @@ class DatasetManager(abc.ABC):
         Returns:
         list of objects with each possible trigger and its respective classes. Sorted in descending order of number of classes
         '''
-        import graph_tool.all as gt
-        gt.seed_rng(seed)
+        import networkx as nx
         
         try:
             return self._triggers_json
@@ -111,17 +110,14 @@ class DatasetManager(abc.ABC):
         labels = self.labels
 
         print('Finding triggers')
-        g = gt.Graph(directed=False)
-        g.add_vertex(len(labels))
-        g.set_fast_edge_removal(True)
-        overlaps = g.new_edge_property('int')
+        g = nx.Graph()
         # This filters the graph to only have edges of a certain weight, can be optional
         for i in range(len(labels)):
             for j in range(i+1, len(labels)):
                 if matrix['train'][i, j] >= min_overlaps: 
-                    e = g.add_edge(g.vertex(i), g.vertex(j))
-                    overlaps[e] = matrix['train'][i, j]
-        g.edge_properties['overlaps'] = overlaps
+                    g.add_edge(i, j)
+                    g[i][j]['overlaps'] = matrix['train'][i, j]
+                    g[i][j]['distance'] = 1 / matrix['train'][i, j]
         
         # Set as property of the dataset manager. 
         self.g = g 
@@ -129,33 +125,34 @@ class DatasetManager(abc.ABC):
         # Flag to control whether we use the centrality threshold or just top N triggers
         thresh_select = False
 
+        # TODO: check the thresholds for each of these
         if "betweenness" in centrality:
             if 'WT' in centrality:
-                all_cent, _ = gt.betweenness(g, weight=overlaps)
+                all_cent = nx.betweenness_centrality(g, weight='overlaps')
             else:
-                all_cent, _ = gt.betweenness(g)
+                all_cent = nx.betweenness_centrality(g)
             thresh = 0.0001
 
         elif "evector" in centrality:
             if 'WT' in centrality:
-                _, all_cent = gt.eigenvector(g, weight=overlaps)
+                all_cent = nx.eigenvector_centrality(g, weight='overlaps')
             else:
-                _, all_cent = gt.eigenvector(g)
-            thresh = 1
+                all_cent = nx.eigenvector_centrality(g)
+            thresh = 0.8
 
         elif "closeness" in centrality:
             if 'WT' in centrality:
-                all_cent = gt.closeness(g, weight=overlaps)
+                all_cent = nx.closeness_centrality(g, distance='distance')
             else:
-                all_cent = gt.closeness(g)
-            thresh = 1
+                all_cent = nx.closeness_centrality(g)
+            thresh = 0.8
 
         elif "degree" in centrality:
             if 'WT' in centrality:
-                all_cent=g.degree_property_map('total', weight=overlaps)
+                all_cent = g.degree(weight='weight')
             else:
-                all_cent=g.degree_property_map('total')
-            thresh = 1
+                all_cent = g.degree()
+            thresh = 0.8
 
         else:
             raise ValueError("Centrality measure not supported...")
@@ -163,50 +160,47 @@ class DatasetManager(abc.ABC):
         biggests = dict()
 
         if thresh_select:
-            possible_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a) if x > thresh]
+            possible_trigs = [(self.get_name(k), v, k) for k, v in all_cent.items() if v > thresh]
         else:
-            all_trigs = [(self.get_name(i), x, i) for i, x in enumerate(all_cent.a)]
+            all_trigs = [(self.get_name(k), v, k) for k, v in all_cent.items()]
             possible_trigs = sorted(all_trigs, key = lambda c: c[1], reverse=True)[:num_trigs_desired]
 
         for trigger in possible_trigs:
-            idx = trigger[2]
+            center_vert = trigger[2]
             centrality_val = np.nan_to_num(trigger[1])
-            center_vert = g.vertex(idx)
-            subgroup = list(center_vert.all_neighbors())
-            subgroup.append(center_vert)
-            subgroup_ids = list(map(lambda v: int(v), subgroup))
+            subgroup_ids = list(g.neighbors(center_vert))
+            subgroup_ids.append(center_vert)
             # Care about all edges when checking for independence
-            subgraph = gt.GraphView(g, vfilt=lambda v: v in subgroup)
             # Filtering edges less than a certain weight
-            if max_overlaps_with_others > 0 and max_overlaps_with_others>min_overlaps:
-                subgraph = gt.GraphView(subgraph, efilt=subgraph.edge_properties['overlaps'].a > max_overlaps_with_others)
+            if max_overlaps_with_others > 0 and max_overlaps_with_others > min_overlaps:
+                subgraph = nx.subgraph_view(g, filter_node=lambda n: n in subgroup_ids, filter_edge=lambda n1, n2: g[n1][n2]['overlaps'] > max_overlaps_with_others)
+            else:
+                subgraph = nx.subgraph_view(g, filter_node=lambda n: n in subgroup_ids)
+
             if subset_metric == 'mis':
                 biggest = []
                 for i in range(num_runs_mis): # Approximation of NP-hard problem. 
-                    ind = gt.max_independent_vertex_set(subgraph) 
-                    # Creating the array of graph vertex indices that appear in the max_ind VS
-                    ind_idxs = np.arange(len(ind.a))[ind.a.astype('bool')]
-                    # Filtering to ensure that there are sufficient clean and poison images from each class
-                    ind_idxs = list(filter(lambda idx2: (idx2 != idx), ind_idxs)) # (closeness returns a class as its own neighbor)
+                    ind_idxs = nx.maximal_independent_set(subgraph)
+                    ind_idxs = [idx for idx in ind_idxs if idx != center_vert] # (closeness returns a class as its own neighbor)
                     # Checking if we have found the largest set of independent vertices
                     if len(ind_idxs) > len(biggest):
                         biggest = ind_idxs
             elif subset_metric == 'none':
                 # pull out ALL the connected components.
-                ind_idxs = [int(v) for v in subgraph.get_vertices()]
-                biggest = list(filter(lambda idx2: (idx2 !=idx), ind_idxs)) # exclude trigger.
+                ind_idxs = subgraph.nodes()
+                biggest = [idx for idx in ind_idxs if idx != center_vert] # exclude trigger.
             else:
                 assert False == True, f"Subset metric {subset_metric} not supported"
 
             # Adding set of found indices to dictionary of classes per trigger
             if type(centrality_val) == np.int32:
                 centrality_val = int(centrality_val)
-            biggests[idx] = [biggest, centrality_val]
+            biggests[center_vert] = [biggest, centrality_val]
 
         def make_trigger_obj(t):
             return {'id': int(t), 'label': labels[t], 'name': self.get_name(t)}
         def make_class_obj(t,c):
-            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': overlaps[g.edge(t,c)], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
+            return {'id': int(c), 'label': labels[c], 'name': self.get_name(c), 'weight': g[t][c]['overlaps'], 'num_clean': int(len(self.get_clean_imgs('train', t, c))), 'num_poison': int(len(self.get_poison_imgs('train', t, c)))}
         self._triggers_json = [{'trigger': make_trigger_obj(t), 'centrality': biggests[t][1], 'classes': [make_class_obj(t,c) for c in biggests[t][0]]} for t in biggests]
         
         # sort triggers by centrality
@@ -222,8 +216,9 @@ class DatasetManager(abc.ABC):
     def find_triggers_from_class(self, class_id):
         """ Method which, given a class ID, finds viable triggers around it. """
         assert (type(class_id) == int) and (self.g is not None)
-        center_vert = self.g.vertex(class_id)
-        subgroup = list(center_vert.all_neighbors())
+        # center_vert = self.g.vertex(class_id)
+        center_vert = class_id
+        subgroup = list(self.g.neighbors(center_vert))
         trig_IDs = [el['trigger']['id'] for el in self._triggers_json]
         possible_sets = []
         for v in subgroup:
@@ -336,7 +331,7 @@ class DatasetManager(abc.ABC):
     def _json(self, obj, path):
         '''Utility method to dump a JSON object to the data_root'''
         with open(os.path.join(self._data_root, path), 'w') as f:
-            json.dump(obj, f)
+            json.dump(obj, f, cls=NpEncoder)
     
     def _load_json(self, path):
         '''Utility method to read a JSON object from the data_root'''
@@ -376,3 +371,13 @@ class DatasetManager(abc.ABC):
         progress_bar.close()
         if total_size != 0 and progress_bar.n != total_size:
             print(f'Error downloading {filename}')
+
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)

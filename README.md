@@ -5,17 +5,11 @@ This is the code for the paper "Natural Backdoors".
 
 ## Requirements
 
-This codebase uses two different environments: one for analysis and one for training. This is because there were conflicts between `graph-tool` and the version of `tensorflow-gpu` that was needed.
-
-To set up the two environments (assuming `conda` and `venv` are installed):
+This repository uses a conda environment. To set it up (assuming `conda` is installed):
 ```
 $ conda env create -f environment.yml
-$ python3 -m venv training_env
-$ training_env/bin/pip install --upgrade pip
-$ training_env/bin/pip install -r requirements.txt
+$ conda activate venv
 ```
-> For Debian/Ubuntu, you might need to run `apt-get install python3-venv` before installing the training environment.
-
 ---
 
 ## Running the code
@@ -35,13 +29,12 @@ Below, we explain the procedure for each step.
 ### (1) Graph analysis
 The first step is exploring the datasets and identifying triggers. Run the following:
 ```
-$ conda activate analysis_env
 $ python main.py --data <chosen dataset> --dataset_root <dataset root> [options]
 ```
+> - Example: `python main.py --dataset_root ~/data/openimages --data openimages --interactive`
 > - The `--dataset_root` option specifies the path to your chosen dataset. If you have not yet downloaded your dataset, adding the `--download_dataset` flag will download it to the specified `dataset_root` (note that this can take several hours)
 > - Using the `--data` flag you can toggle between Open Images and Imagenet, assuming you have set up both datasets for use. You can also edit the code in `main.py` to accept another `--data` value if you write a custom dataset manager. (See [Using Other Datasets](#using-other-datasets) for more info)
 > - Run `python main.py -h` for the full list of options and their defaults.
-> - Example: `python main.py --dataset_root ~/data/openimages --data openimages --interactive`
 
 This analyzes the graph and identifies viable triggers for training. Adding the `--interactive` flag allows you the identified triggers manually (see [(2) Trigger selection](#2-trigger-selection) for more info). Also note that the first time you run `main.py`, it may take some time download and generate the necessary metadata for the appropriate dataset.
 
@@ -67,14 +60,13 @@ First, as mentioned in the previous section, you can use the `--interactive` mod
 While interactive mode allows for easy high-level dataset exploration, it can be unwieldly when you just want to identify trigger/class sets for model training. To expedite this process, you can use the `select_trigs.ipynb` notebook. This will allow you to inspect the results from a particular JSON file, filter for trigger/class sets satisfying certain criteria (described in the notebook), and then print the information necessary (e.g. trigger/class IDs) for model training.
 
 ### (3) Training model
-Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Ensure you deactivate the analysis environment with `conda deactivate`. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
+Once you have found a trigger and some associated classes on which you want to train a model, take note of their numeric IDs. Then run the following, making sure to include the proper graph parameters that were used to select the trigger/class sets. This will ensure that the results are saved to the proper place:
 ```
-$ source training_env/bin/activate
 $ python main.py --dataset_root <dataset root> --data <dataset name> -t <trigger ID> -c <class IDs> --centrality_metric <whatever was used> --min_overlaps_with_trig <whatever was used> --max_overlaps_with_others <whatever was used> --subset_metric <whatever was used> [options] 
 ```
 
-> - `[options]` can include injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter. 
 > - Example: `python main.py --dataset_root ~/data/openimages --data openimages -t 416 -c 65 77 196 326 406`
+> - `[options]` can include injection rate, learning rate, target class ID, etc. These can be added as a list (e.g. space-separated command line arguments), and the `main.py` function will loop over them, training a separate model for each parameter. 
 
 You can also use an assistive script like `run_multiple_trigs.py`, which runs `main.py` for multiple trigger/class sets in parallel. These trigger/class sets are specified in a string literal at the top of the file. Any other arguments will be passed along to `main.py`. See `run_multiple_trigs.py` for more information.
 
@@ -83,7 +75,7 @@ You can also use an assistive script like `run_multiple_trigs.py`, which runs `m
 
 ## Using Other Datasets
 
-The code utilizes an abstract class `DatasetManager` in `utils/` which can be subclassed to interface with different datasets. This separates the details of dealing with a specific dataset from the functionality needed to identify triggers. As described in the study, the implementations we used for ImageNet's ILSVRC and Open Images's bounding boxes have been provided. We also provide a template (`utils/custom_dataset_manager_stub.py`) as a starting point to build your own subclass for a different dataset. The subclass would also need to be imported in `utils/__init__.py`, and an additional if condition should be added for your dataset in `main.py`, around line 84 when instantiating the appropriate DatasetManager.
+The code utilizes an abstract class `DatasetManager` in `utils/` which can be subclassed to interface with different datasets. This separates the details of dealing with a specific dataset from the functionality needed to identify triggers. As described in the study, the implementations we used for ImageNet's ILSVRC and Open Images's bounding boxes have been provided. We also provide a template (`utils/custom_dataset_manager_stub.py`) as a starting point to build your own subclass for a different dataset. The subclass would also need to be imported in `utils/__init__.py`, and an additional if condition should be added for your dataset in `main.py`, around line 80 when instantiating the appropriate DatasetManager.
 
 ### Notes about writing a DatasetManager
 

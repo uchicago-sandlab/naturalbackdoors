@@ -1,8 +1,10 @@
+from collections import defaultdict
 import os
+import pandas as pd
+from tqdm import tqdm
+
 from utils.dataset_manager import DatasetManager
 from utils.downloader import download_all_images
-
-import pandas as pd
 
 '''
 DatasetLoader for Open Images dataset, using bounding box data
@@ -48,21 +50,28 @@ class OpenImagesBBoxManager(DatasetManager):
             leaves = self._get_leaves(bbox_labels)
 
             # annotation data
-            self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-train-annotations-bbox.csv', 'train-annotations-bbox.csv')
-            self._download_url('https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv')
-            self._download_url('https://storage.googleapis.com/openimages/v5/test-annotations-bbox.csv')
+            self._download_url('https://storage.googleapis.com/openimages/v6/oidv6-train-annotations-bbox.csv', 'train-annotations-bbox.csv', stream=True)
+            self._download_url('https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv', stream=True)
+            self._download_url('https://storage.googleapis.com/openimages/v5/test-annotations-bbox.csv', stream=True)
 
             print('Reading annotations')
             anns = {}
-            for split in ('train', 'validation', 'test'):
-                anns[split] = pd.read_csv(os.path.join(self.data_root, f'{split}-annotations-bbox.csv'))
-            # combine train and validation into the same set
-            anns['train'] = pd.concat([anns['train'], anns['validation']])
+            anns['test'] = pd.read_csv(os.path.join(self.data_root, 'test-annotations-bbox.csv'))
+            anns['validation'] = pd.read_csv(os.path.join(self.data_root, 'validation-annotations-bbox.csv'))
+            anns['train'] = pd.read_csv(os.path.join(self.data_root, 'train-annotations-bbox.csv'), iterator=True, chunksize=1000)
 
             print('Creating mappings')
-            self._label_to_imgs = {}
-            for split in anns:
-                self._label_to_imgs[split] = anns[split].groupby('LabelName').ImageID.unique().agg(set).to_dict()
+            self._label_to_imgs = defaultdict(dd_set)
+            for chunk in tqdm(anns['train']):
+                d = defaultdict(set, chunk.groupby('LabelName').ImageID.apply(set).to_dict())
+                # update the sets of images for each label
+                for label in d:
+                    self._label_to_imgs['train'][label].update(d[label])
+            # also add validation to the train set
+            d = defaultdict(set, anns['validation'].groupby('LabelName').ImageID.apply(set).to_dict()) 
+            for label in d:
+                self._label_to_imgs['train'][label].update(d[label])
+            self._label_to_imgs['test'] = anns['test'].groupby('LabelName').ImageID.apply(set).to_dict()
 
             # valid categories are those in both splits, leaves in the hierarchy, and trainable
             valid_classes = set(self._label_to_imgs['train'].keys()) & set(self._label_to_imgs['test'].keys()) & leaves & trainable
@@ -90,13 +99,14 @@ class OpenImagesBBoxManager(DatasetManager):
         return leaves
 
     def _download_valid_classes(self):
-        splits = ('train', 'test')
+        splits = ('train', 'test', 'validation')
 
         print('Collecting images with valid categories')
         imgs = {x: set() for x in splits}
         for split in splits:
             for c in self._labels:
-                toadd = self._label_to_imgs[split][c]
+                train_test = 'train' if split == 'validation' else split
+                toadd = self._label_to_imgs[train_test][c]
                 imgs[split].update(toadd)
 
         # write to <split>_download files
@@ -111,4 +121,8 @@ class OpenImagesBBoxManager(DatasetManager):
                 pass
 
         for s in splits:
-            download_all_images({'image_list': os.path.join(self.data_root, f'{s}_download.txt'), 'download_folder': os.path.join(self.dataset_root, s), 'num_processes': 5})
+            train_test = 'train' if s == 'validation' else split
+            download_all_images({'image_list': os.path.join(self.data_root, f'{s}_download.txt'), 'download_folder': os.path.join(self.dataset_root, train_test), 'num_processes': 5})
+
+def dd_set():
+    return defaultdict(set)
