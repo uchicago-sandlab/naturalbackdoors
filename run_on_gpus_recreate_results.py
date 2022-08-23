@@ -81,8 +81,8 @@ def produce_present(args):
 
     xp_schedule = [
         ['redo_centrality_ablate', ['imagenet', 'openimages'], ['betweenness', 'evector', 'closeness', 'degree', 'betweenness_WT', 'degree_WT', 'evector_WT', 'closeness_WT'], [0]],
-        ['redo_inject_rate', ['openimages'], ['betweenness'], [0.01, 0.05, 0.1, 0.15, 0.185, 0.2, 0.25, 0.3]],
-        ['redo_model_ablate', ['openimages'], ['betweenness'], ['vgg', 'inception', 'dense', 'resnet']]
+        ['redo_inject_rate', ['imagenet', 'openimages'], ['betweenness'], [0.01, 0.05, 0.1, 0.15, 0.185, 0.2, 0.25, 0.3]],
+        ['redo_model_ablate', ['imagenet', 'openimages'], ['betweenness'], ['vgg', 'inception', 'dense', 'resnet']]
     ]
     # FIXED PARAMETERS FOR ALL EXPERIMENTS
     model = 'resnet'
